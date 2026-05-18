@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Активные диалоги</h1>
+
+{% if dialogs %}
+<div class="card" style="padding:0; overflow:hidden;">
+  <table>
+    <thead>
+      <tr>
+        <th>User ID</th>
+        <th>Статус</th>
+        <th>Сообщений</th>
+        <th>Последнее сообщение</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for d in dialogs %}
+      <tr>
+        <td><code>{{ d.user_id }}</code></td>
+        <td><span class="badge badge-{{ d.state or 'none' }}">{{ d.state or '—' }}</span></td>
+        <td style="color:#64748b;">{{ d.msg_count }}</td>
+        <td style="color:#475569; max-width:360px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+          {{ d.last_msg }}{% if d.last_msg|length >= 100 %}…{% endif %}
+        </td>
+        <td style="white-space:nowrap;">
+          <a href="/history/{{ d.user_id }}" class="btn btn-primary">История</a>
+          <form method="post" action="/clear/{{ d.user_id }}" onsubmit="return confirm('Сбросить диалог с {{ d.user_id }}?')">
+            <button class="btn btn-danger">Сброс</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card"><div class="empty">Нет активных диалогов</div></div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem \"C:\\\\Delete\\\\clRosreestr\" -Recurse | Where-Object { -not $_.PSIsContainer } | Select-Object -ExpandProperty FullName)",
+      "PowerShell(docker exec clrosreestr-chromadb-1 *)",
+      "PowerShell(docker inspect clrosreestr-chromadb-1 --format \"{{json .Config.Image}}\"; Write-Output \"\"; \\(Invoke-WebRequest -Uri \"http://localhost:8000/api/v1/heartbeat\" -UseBasicParsing -ErrorAction SilentlyContinue\\).StatusCode; \\(Invoke-WebRequest -Uri \"http://localhost:8000/api/v2/heartbeat\" -UseBasicParsing -ErrorAction SilentlyContinue\\).StatusCode)",
+      "PowerShell(\\(Invoke-WebRequest -Uri \"http://localhost:8000/api/v1/heartbeat\" -UseBasicParsing\\).StatusCode; \\(Invoke-WebRequest -Uri \"http://localhost:8000/api/v1/heartbeat\" -UseBasicParsing\\).Content)",
+      "PowerShell(\\(Invoke-WebRequest -Uri \"http://localhost:8000/api/v2/heartbeat\" -UseBasicParsing\\).Content)",
+      "PowerShell(cd C:\\\\Delete\\\\clRosreestr; $env:CHROMA_HOST=\"localhost\"; python scripts/ingest.py)",
+      "PowerShell(cd C:\\\\Delete\\\\clRosreestr; $env:CHROMA_HOST=\"localhost\"; $env:PYTHONIOENCODING=\"utf-8\"; python scripts/ingest.py)",
+      "PowerShell(docker exec clrosreestr-app-1 sh -c \"echo $MONITORED_CHATS\")",
+      "PowerShell(docker exec clrosreestr-app-1 *)",
+      "PowerShell(docker exec clrosreestr-redis-1 *)"
+    ]
+  }
+}

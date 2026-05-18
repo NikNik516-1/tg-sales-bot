@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row" style="margin-bottom:24px;">
+  <h1 style="margin:0;">Диалог с <code>{{ user_id }}</code></h1>
+  <span class="badge badge-{{ state or 'none' }}">{{ state or 'нет состояния' }}</span>
+  <div style="margin-left:auto;" class="row">
+    <form method="post" action="/clear/{{ user_id }}" onsubmit="return confirm('Сбросить диалог?')">
+      <button class="btn btn-danger">Сбросить диалог</button>
+    </form>
+    <a href="/" class="btn btn-gray">← Назад</a>
+  </div>
+</div>
+
+{% if history %}
+<div class="card" style="padding:0; overflow:hidden;">
+  {% for msg in history %}
+  <div style="
+    padding: 14px 20px;
+    border-bottom: 1px solid #f1f5f9;
+    {% if msg.role == 'assistant' %}background:#f0f7ff;{% endif %}
+  ">
+    <div style="font-size:11px; font-weight:600; color:{% if msg.role == 'assistant' %}#3b82f6{% else %}#94a3b8{% endif %}; text-transform:uppercase; letter-spacing:.5px; margin-bottom:6px;">
+      {% if msg.role == 'assistant' %}🤖 Бот{% else %}👤 Пользователь{% endif %}
+    </div>
+    <div style="font-size:14px; line-height:1.6; white-space:pre-wrap; color:#1e293b;">{{ msg.content }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="card"><div class="empty">История пуста</div></div>
+{% endif %}
+{% endblock %}
