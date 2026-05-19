@@ -215,7 +215,4 @@ kubectl get hpa -n tg-sales-bot       # HorizontalPodAutoscaler для ai-worker
 kubectl describe pod -n tg-sales-bot   # диагностика
 ```
 
-**Ingress + TLS (Фаза 6.3, пока не активирован):**
-Файл `k8s/20-ingress.yaml` — cert-manager + Let's Encrypt + Traefik.
-Перед применением: установить cert-manager и убрать nginx с портов 80/443.
-Когда готово — добавить `20-ingress.yaml` в `k8s/kustomization.yaml`.
+**Важно:** nginx остаётся единственным фронтом для всего сервера (antilopa-gnu.ru и другие домены). Traefik отключён при установке k3s. SSL-сертификаты управляются certbot на уровне nginx — не трогать.
