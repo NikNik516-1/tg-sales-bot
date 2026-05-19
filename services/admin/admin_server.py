@@ -72,8 +72,8 @@ async def clear_dialog(request: Request, user_id: int):
 
 @app.get("/groups", response_class=HTMLResponse)
 async def groups_page(request: Request):
-    monitored = chat_manager.get()
     r = _redis()
+    monitored = await r.smembers("monitored_chats")
     seen_raw = await r.hgetall("seen_chats")
     await r.aclose()
     seen = {k: json.loads(v) for k, v in seen_raw.items()}
