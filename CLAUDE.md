@@ -107,14 +107,35 @@ Telegram → listener → [RabbitMQ: tg.incoming] → ai-worker → [RabbitMQ: t
 - `main` — стабильный прод, только через PR
 - `dev` — текущая разработка
 
+## Создание и мержинг PR
+
+`gh` CLI установлен (`winget install GitHub.cli`). Первый раз — авторизация:
+```bash
+gh auth login   # выбрать GitHub.com → HTTPS → Login with a web browser
+```
+
+После авторизации создание PR и мерж в одну команду:
+```bash
+# Создать PR (dev → main)
+gh pr create --title "feat: ..." --body "## Summary\n..."
+
+# Смержить (объединить dev в main → запустится деплой)
+gh pr merge <номер> --merge
+
+# Или сразу после создания:
+gh pr create --title "..." --body "..." && gh pr merge --merge
+```
+
+**Смержить** = слить ветку `dev` в `main`. После этого GitHub Actions автоматически собирает образы и деплоит на VPS.
+
 ## CI/CD (Фаза 5)
 
 **Обычный цикл разработки:**
 ```
 git commit + git push origin dev
-  → CI (ci.yml): ruff check · pytest · docker build ×3
-  → создать PR dev→main → смержить
-  → deploy.yml: build+push образов в GHCR → SSH на VPS → docker compose pull + up -d
+  → gh pr create --title "..." --body "..."
+  → gh pr merge <номер> --merge
+  → CI+deploy: ruff · pytest · docker build · push GHCR · SSH на VPS → kubectl apply
 ```
 
 **GitHub Actions:**
