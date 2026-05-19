@@ -69,6 +69,15 @@ jobs:
                 -n tg-sales-bot \
                 --dry-run=client -o yaml | kubectl apply -f -
               kubectl apply -k k8s/
+
+              # Force-pull new images into containerd cache before restart
+              # (imagePullPolicy: IfNotPresent uses cache; this ensures cache is current)
+              for svc in listener ai-worker admin; do
+                sudo crictl pull \
+                  --creds "$GITHUB_ACTOR:$GHCR_TOKEN" \
+                  "ghcr.io/niknik516-1/tg-sales-bot/${svc}:latest" || true
+              done
+
               kubectl rollout restart deployment/listener deployment/ai-worker deployment/admin -n tg-sales-bot
               kubectl rollout status deployment/ai-worker deployment/admin -n tg-sales-bot --timeout=120s
             else
