@@ -52,11 +52,47 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           envs: GHCR_TOKEN,GITHUB_ACTOR
           script: |
-            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+            # Fix nginx static files proxy (idempotent — runs once, then no-op)
+            sudo python3 -c "
+            import subprocess, sys
+            path = '/etc/nginx/sites-enabled/antilopa-gnu-ru.conf'
+            try:
+                cfg = open(path).read()
+            except FileNotFoundError:
+                sys.exit(0)
+            if 'adminka/static' in cfg:
+                sys.exit(0)
+            block = '    location ^~ /tg-sales-bot/adminka/static/ {\n        proxy_pass http://127.0.0.1:8082/static/;\n        proxy_set_header Host \$host;\n    }\n'
+            cfg = cfg.replace('location /tg-sales-bot/adminka/', block + '    location /tg-sales-bot/adminka/')
+            open(path, 'w').write(cfg)
+            r = subprocess.run(['nginx', '-t'], capture_output=True)
+            if r.returncode == 0:
+                subprocess.run(['systemctl', 'reload', 'nginx'])
+            else:
+                print('nginx test failed:', r.stderr.decode())
+                sys.exit(1)
+            "
+
             cd /var/develop/tg-sales-bot
             git fetch origin main
             git checkout main
             git pull
-            docker compose pull listener ai-worker admin
-            docker compose up -d
-            docker image prune -f
+
+            if kubectl get ns tg-sales-bot >/dev/null 2>&1; then
+              # k3s deployment (после bootstrap)
+              kubectl create secret docker-registry ghcr-secret \
+                --docker-server=ghcr.io \
+                --docker-username="$GITHUB_ACTOR" \
+                --docker-password="$GHCR_TOKEN" \
+                -n tg-sales-bot \
+                --dry-run=client -o yaml | kubectl apply -f -
+              kubectl apply -k k8s/
+              kubectl rollout restart deployment/listener deployment/ai-worker deployment/admin -n tg-sales-bot
+              kubectl rollout status deployment/ai-worker deployment/admin -n tg-sales-bot --timeout=120s
+            else
+              # docker-compose fallback (до bootstrap k3s)
+              echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+              docker compose pull listener ai-worker admin
+              docker compose up -d
+              docker image prune -f
+            fi
