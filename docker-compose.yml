@@ -112,11 +112,33 @@ services:
       - bot_net
     restart: unless-stopped
 
+  grafana:
+    image: grafana/grafana:11.1.0
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+      - GF_AUTH_DISABLE_LOGIN_FORM=false
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3001:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - bot_net
+    restart: unless-stopped
+
 volumes:
   chroma_data:
   redis_data:
   rabbitmq_data:
   prometheus_data:
+  grafana_data:
 
 networks:
   bot_net:
