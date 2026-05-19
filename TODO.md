@@ -25,6 +25,7 @@
 - [x] 2.8 Написать отдельный `Dockerfile` для каждого сервиса
 
 **Схема очередей RabbitMQ:**
+
 ```
 listener → [tg.incoming] → ai-worker → [tg.outgoing] → listener → Telegram DM
 ```
@@ -41,28 +42,31 @@ listener → [tg.incoming] → ai-worker → [tg.outgoing] → listener → Tele
 
 ---
 
-## Фаза 4: VPS и окружение
+docker compose up -d --build
 
-- [ ] 4.1 Арендовать VPS (минимум 2 CPU / 4 GB RAM): Hetzner / DigitalOcean / Timeweb
-- [ ] 4.2 Установить на VPS: Docker, Docker Compose
-- [ ] 4.3 Сгенерировать SSH-ключ для GitHub Actions, добавить в `~/.ssh/authorized_keys` на VPS
-- [ ] 4.4 В GitHub Settings → Secrets добавить:
-  - `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`
-  - `TG_API_ID`, `TG_API_HASH`, `TG_SESSION_STRING`
-  - `OPENAI_API_KEY`
-  - `GHCR_TOKEN` (Personal Access Token → packages: write)
-- [ ] 4.5 Создать `.env` на VPS вручную (один раз, не в git)
+## Фаза 4: VPS и окружение ✅
+
+Сервер: `77.83.87.29`, деплой в `/var/develop/tg-sales-bot/`.
+Админка: `https://antilopa-gnu.ru/tg-sales-bot/adminka/`
+
+- [x] 4.1 VPS уже есть (77.83.87.29, Ubuntu 22.04, 1 vCPU / 3.8 GB RAM)
+- [x] 4.2 Docker уже установлен на VPS
+- [x] 4.3 Репозиторий склонирован, сервисы запущены через docker compose
+- [x] 4.4 Nginx location добавлен в antilopa-gnu-ru.conf
+- [x] 4.5 `.env` создан на VPS вручную (ROOT_PATH=/tg-sales-bot/adminka)
 
 ---
 
 ## Фаза 5: GitHub Actions CI/CD
 
 **`.github/workflows/ci.yml`** — на каждый push/PR:
+
 - [ ] 5.1 Lint: `ruff check .`
 - [ ] 5.2 Tests: `pytest` (написать 2-3 базовых теста)
 - [ ] 5.3 Build Docker images (проверка что собирается)
 
 **`.github/workflows/deploy.yml`** — только при merge в `main`:
+
 - [ ] 5.4 Build & push образов в `ghcr.io/niknik516-1/...`
 - [ ] 5.5 SSH на VPS → `docker compose pull && docker compose up -d`
 - [ ] 5.6 Telegram-уведомление об успешном деплое (опционально)
@@ -101,4 +105,4 @@ listener → [tg.incoming] → ai-worker → [tg.outgoing] → listener → Tele
 ✅ Фаза 1 → ✅ Фаза 2 → ✅ Фаза 3 → Фаза 4 → Фаза 5 → Фаза 6 → Фаза 7
 ```
 
-Текущий статус: **Фаза 4 — VPS**.
+Текущий статус: **Фаза 5 — GitHub Actions CI/CD**.

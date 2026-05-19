@@ -12,7 +12,7 @@ Telegram sales bot: слушает сообщения в заданных гру
 services/
   listener/     — Pyrogram singleton: читает Telegram, публикует события в RabbitMQ
   ai-worker/    — потребляет очередь, вызывает GPT+RAG, публикует ответы
-  admin/        — FastAPI веб-админка (порт 8080)
+  admin/        — FastAPI веб-админка (порт 8082 на хосте)
 shared/         — общий код: config.py, state.py, mq.py (копируется в каждый образ)
 app/            — монолитная версия (сохранена для истории, не используется)
 data/knowledge_base/  — txt-файлы для RAG
@@ -38,7 +38,7 @@ docker compose logs ai-worker -f
 docker exec clrosreestr-redis-1 redis-cli DEL "state:USER_ID" "history:USER_ID"
 ```
 
-Порты: `8080` — веб-админка, `15672` — RabbitMQ Management UI (guest/guest), `8000` — ChromaDB.
+Порты (все привязаны к localhost): `8082` — веб-админка, `15672` — RabbitMQ Management UI (guest/guest), `8000` — ChromaDB.
 
 ## Загрузка базы знаний в ChromaDB
 
@@ -68,6 +68,7 @@ python scripts/generate_session.py
 | `KEYWORDS` | Ключевые фразы через запятую, поиск по вхождению (регистронезависимо) |
 | `ADMIN_TG_ID` | TG user_id администратора |
 | `RABBITMQ_URL` | По умолчанию `amqp://guest:guest@rabbitmq/` |
+| `ROOT_PATH` | Prefix для FastAPI (на VPS: `/tg-sales-bot/adminka`; локально — пусто) |
 
 ## Архитектура микросервисов
 
@@ -103,3 +104,27 @@ Telegram → listener → [RabbitMQ: tg.incoming] → ai-worker → [RabbitMQ: t
 
 - `main` — стабильный прод, только через PR
 - `dev` — текущая разработка
+
+## Deploy
+
+**Сервер:** `77.83.87.29` (claude@), директория `/var/develop/tg-sales-bot/`
+
+**Первый деплой:**
+```bash
+# На сервере
+git clone -b dev https://github.com/NikNik516-1/tg-sales-bot.git /var/develop/tg-sales-bot
+# Создать .env (не в git) с ROOT_PATH=/tg-sales-bot/adminka
+cd /var/develop/tg-sales-bot && docker compose up -d --build
+# Загрузить базу знаний
+CHROMA_HOST=localhost python3 scripts/ingest.py
+```
+
+**Обновление:**
+```bash
+cd /var/develop/tg-sales-bot
+git pull origin dev
+docker compose up -d --build
+```
+
+**Nginx:** добавлен location в `/etc/nginx/sites-enabled/antilopa-gnu-ru.conf`:
+- `https://antilopa-gnu.ru/tg-sales-bot/adminka/` → `http://127.0.0.1:8082/`
