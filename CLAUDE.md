@@ -12,13 +12,15 @@ Telegram sales bot: слушает сообщения в заданных гру
 services/
   listener/     — Pyrogram singleton: читает Telegram, публикует события в RabbitMQ
   ai-worker/    — потребляет очередь, вызывает GPT+RAG, публикует ответы
-  admin/        — FastAPI веб-админка (порт 8082 на хосте)
+  admin/        — FastAPI веб-админка (порт 8082 на хосте) + static/favicon.png
 shared/         — общий код: config.py, state.py, mq.py (копируется в каждый образ)
 app/            — монолитная версия (сохранена для истории, не используется)
 data/knowledge_base/  — txt-файлы для RAG
+data/images/    — иконки и изображения (favicon и т.п.)
 scripts/        — generate_session.py, ingest.py
+tests/          — pytest: test_keywords.py, test_timestamp.py, test_chat_manager.py
 k8s/            — Kubernetes манифесты (Фаза 6)
-.github/workflows/    — CI/CD пайплайны (Фаза 5)
+.github/workflows/    — ci.yml (lint+test+build), deploy.yml (push GHCR + SSH деплой)
 ```
 
 ## Docker (локальная разработка)
@@ -105,25 +107,61 @@ Telegram → listener → [RabbitMQ: tg.incoming] → ai-worker → [RabbitMQ: t
 - `main` — стабильный прод, только через PR
 - `dev` — текущая разработка
 
+## CI/CD (Фаза 5)
+
+**Обычный цикл разработки:**
+```
+git commit + git push origin dev
+  → CI (ci.yml): ruff check · pytest · docker build ×3
+  → создать PR dev→main → смержить
+  → deploy.yml: build+push образов в GHCR → SSH на VPS → docker compose pull + up -d
+```
+
+**GitHub Actions:**
+- `ci.yml` — запускается на каждый push/PR: lint, tests, docker build
+- `deploy.yml` — только при merge в `main`: пушит образы в GHCR, деплоит на VPS по SSH
+
+**GHCR образы:**
+```
+ghcr.io/niknik516-1/tg-sales-bot/listener:latest
+ghcr.io/niknik516-1/tg-sales-bot/ai-worker:latest
+ghcr.io/niknik516-1/tg-sales-bot/admin:latest
+```
+
+**Секреты GitHub** (уже настроены):
+- `DEPLOY_SSH_KEY` — Ed25519 приватный ключ для SSH на VPS (публичная часть в `~/.ssh/authorized_keys`)
+- `GITHUB_TOKEN` — автоматически, для push в GHCR
+
+**Запуск тестов локально:**
+```bash
+pip install -r requirements-dev.txt
+pytest -v
+```
+
 ## Deploy
 
 **Сервер:** `77.83.87.29` (claude@), директория `/var/develop/tg-sales-bot/`
 
-**Первый деплой:**
+**Первый деплой (bootstrap нового сервера):**
 ```bash
 # На сервере
-git clone -b dev https://github.com/NikNik516-1/tg-sales-bot.git /var/develop/tg-sales-bot
+git clone https://github.com/NikNik516-1/tg-sales-bot.git /var/develop/tg-sales-bot
+cd /var/develop/tg-sales-bot
 # Создать .env (не в git) с ROOT_PATH=/tg-sales-bot/adminka
-cd /var/develop/tg-sales-bot && docker compose up -d --build
+docker compose pull && docker compose up -d
 # Загрузить базу знаний
 CHROMA_HOST=localhost python3 scripts/ingest.py
 ```
 
-**Обновление:**
+**Обновление — через CI/CD (автоматически):**
+Смержить PR в `main` → GitHub Actions задеплоит сам.
+
+**Обновление — вручную (если CI/CD недоступен):**
 ```bash
 cd /var/develop/tg-sales-bot
-git pull origin dev
-docker compose up -d --build
+git pull origin main
+docker compose pull listener ai-worker admin
+docker compose up -d
 ```
 
 **Nginx:** добавлен location в `/etc/nginx/sites-enabled/antilopa-gnu-ru.conf`:
