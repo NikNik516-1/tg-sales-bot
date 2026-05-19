@@ -34,3 +34,13 @@ async def remove(chat_id: str) -> None:
     r = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
     await r.srem(_CHATS_KEY, chat_id)
     await r.aclose()
+
+
+async def reload() -> None:
+    r = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+    stored = await r.smembers(_CHATS_KEY)
+    await r.aclose()
+    if stored != _chats:
+        _chats.clear()
+        _chats.update(stored)
+        print(f"[CHATS] Обновлён список: {_chats or 'пусто (debug-режим)'}")
