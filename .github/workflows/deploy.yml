@@ -52,6 +52,8 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           envs: GHCR_TOKEN,GITHUB_ACTOR
           script: |
+            export KUBECONFIG=/home/claude/.kube/config
+
             cd /var/develop/tg-sales-bot
             git fetch origin main
             git checkout main
