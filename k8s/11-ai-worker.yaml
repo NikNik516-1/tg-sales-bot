@@ -16,7 +16,7 @@ spec:
       containers:
       - name: ai-worker
         image: ghcr.io/niknik516-1/tg-sales-bot/ai-worker:latest
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         envFrom:
         - secretRef:
             name: bot-secret

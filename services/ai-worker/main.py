@@ -1,9 +1,13 @@
 import asyncio
-import rag
+import structlog
+from logger import setup
 from state import get_state, set_state, get_history, append_history, save_user_info
 from ai_client import generate_reply, is_agreement
 from mq import get_connection, publish, consume, QUEUE_INCOMING, QUEUE_OUTGOING
 from config import ADMIN_TG_ID
+import rag
+
+log = setup("ai-worker")
 
 
 async def process_message(payload: dict) -> None:
@@ -28,7 +32,7 @@ async def process_message(payload: dict) -> None:
                     f"ID: {user_id}"
                 )
                 await _publish_response(user_id, "Отлично! Наш менеджер свяжется с вами в ближайшее время. Спасибо!", notify_admin=True, admin_text=admin_text)
-                print(f"[SALE] Сделка с user_id={user_id}")
+                log.info("сделка закрыта", user_id=user_id)
                 return
 
         rag_docs = rag.search(text)
@@ -53,10 +57,10 @@ async def process_message(payload: dict) -> None:
 
         await append_history(user_id, "assistant", reply)
         await _publish_response(user_id, reply)
-        print(f"[AI] Ответ для user_id={user_id} is_opening={is_opening}")
+        log.info("ответ сгенерирован", user_id=user_id, is_opening=is_opening)
 
     except Exception as e:
-        print(f"[ERROR] process_message user_id={user_id}: {e}")
+        log.error("ошибка обработки сообщения", user_id=user_id, error=str(e))
         await _publish_response(user_id, "Я чуть-чуть сломался и не могу ответить прямо сейчас. Напишите ещё раз — попробую снова.")
 
 
@@ -75,13 +79,13 @@ async def _publish_response(user_id: int, text: str, notify_admin: bool = False,
 async def main():
     global _mq_connection
 
-    print("[BOOT] Инициализация RAG...")
+    log.info("инициализация RAG")
     rag.init()
 
-    print("[BOOT] Подключение к RabbitMQ...")
+    log.info("подключение к RabbitMQ")
     _mq_connection = await get_connection()
 
-    print("[BOOT] ai-worker готов, ожидаю задания...")
+    log.info("ai-worker готов")
     await consume(_mq_connection, QUEUE_INCOMING, process_message)
 
 

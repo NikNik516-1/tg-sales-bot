@@ -2,6 +2,7 @@ import json
 import asyncio
 from datetime import datetime, timezone
 
+import structlog
 import redis.asyncio as aioredis
 from pyrogram import Client, filters
 from pyrogram.enums import ChatType
@@ -12,6 +13,8 @@ from config import ADMIN_TG_ID, REDIS_HOST, REDIS_PORT
 from state import get_state, set_state, clear_user
 from mq import publish, QUEUE_INCOMING, QUEUE_OUTGOING
 import chat_manager
+
+log = structlog.get_logger()
 
 _mq_connection = None
 
@@ -26,7 +29,7 @@ async def _send_safe(client: Client, user_id: int, text: str) -> bool:
         await client.send_message(user_id, text)
         return True
     except (UserIsBlocked, InputUserDeactivated, PeerIdInvalid) as e:
-        print(f"[DM] Не удалось отправить {user_id}: {e}")
+        log.warning("не удалось отправить DM", user_id=user_id, error=str(e))
         return False
 
 
@@ -43,7 +46,7 @@ async def _log_seen_channel(client: Client, message: Message) -> None:
         if chat.linked_chat:
             linked_group_id = str(chat.linked_chat.id)
     except Exception as e:
-        print(f"[CHANNEL] Не удалось получить linked_chat для {channel_id}: {e}")
+        log.warning("не удалось получить linked_chat", channel_id=channel_id, error=str(e))
 
     info = json.dumps({
         "title": message.chat.title or "",
@@ -80,7 +83,7 @@ async def _log_seen_chat(message: Message) -> None:
 def _in_monitored_chat(_, __, message: Message) -> bool:
     chats = chat_manager.get()
     if not chats:
-        print(f"[DEBUG] chat_id={message.chat.id}  username={message.chat.username}")
+        log.debug("debug chat", chat_id=message.chat.id, username=message.chat.username)
         return False
     chat_id = str(message.chat.id)
     username = message.chat.username or ""
@@ -115,11 +118,13 @@ def register(app: Client):
 
     @app.on_message(monitored_chat & has_keyword & ~filters.me)
     async def on_keyword(client: Client, message: Message):
+        if not message.from_user:
+            return
         user_id = message.from_user.id
         state = await get_state(user_id)
 
         if state == "pitching":
-            print(f"[KEYWORD] продолжение диалога user_id={user_id}")
+            log.info("продолжение диалога", user_id=user_id)
             await publish(_mq_connection, QUEUE_INCOMING, {
                 "user_id": user_id,
                 "text": f"[Группа] {message.text}",
@@ -135,7 +140,7 @@ def register(app: Client):
         if state:
             return
 
-        print(f"[KEYWORD] новый user_id={user_id}")
+        log.info("новый диалог", user_id=user_id)
         await set_state(user_id, "pitching")
         await publish(_mq_connection, QUEUE_INCOMING, {
             "user_id": user_id,
@@ -153,7 +158,7 @@ def register(app: Client):
         user_id = message.from_user.id
         await clear_user(user_id)
         await message.reply("Диалог сброшен. Можете начать заново.")
-        print(f"[RESET] user_id={user_id}")
+        log.info("диалог сброшен", user_id=user_id)
 
     @app.on_message(filters.private & ~filters.me)
     async def on_private(client: Client, message: Message):
