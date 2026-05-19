@@ -2,6 +2,7 @@ import json
 import os
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import redis.asyncio as aioredis
 from config import REDIS_HOST, REDIS_PORT
@@ -9,6 +10,7 @@ import chat_manager
 from state import get_all_active_users, get_history, get_state, clear_user, get_user_info
 
 app = FastAPI(title="ПенШоп Админка", root_path=os.environ.get("ROOT_PATH", ""))
+app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
 _tg_client = None
