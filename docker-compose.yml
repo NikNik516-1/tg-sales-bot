@@ -97,10 +97,26 @@ services:
       - bot_net
     restart: unless-stopped
 
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+    ports:
+      - "127.0.0.1:9090:9090"
+    networks:
+      - bot_net
+    restart: unless-stopped
+
 volumes:
   chroma_data:
   redis_data:
   rabbitmq_data:
+  prometheus_data:
 
 networks:
   bot_net:

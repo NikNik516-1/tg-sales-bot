@@ -4,3 +4,4 @@ aio-pika
 redis[asyncio]
 python-dotenv
 structlog
+prometheus-client
