@@ -1,5 +1,8 @@
+import structlog
 import redis.asyncio as aioredis
 from config import REDIS_HOST, REDIS_PORT, MONITORED_CHATS
+
+log = structlog.get_logger()
 
 _CHATS_KEY = "monitored_chats"
 _INIT_FLAG = "monitored_chats:initialized"
@@ -13,13 +16,12 @@ async def load() -> None:
         stored = await r.smembers(_CHATS_KEY)
         _chats.update(stored)
     else:
-        # Первый запуск — засеять из .env и выставить флаг
         _chats.update(MONITORED_CHATS)
         if MONITORED_CHATS:
             await r.sadd(_CHATS_KEY, *MONITORED_CHATS)
         await r.set(_INIT_FLAG, "1")
     await r.aclose()
-    print(f"[CHATS] Мониторинг: {_chats or 'debug-режим'}")
+    log.info("чаты загружены", monitored=list(_chats) or "debug-режим")
 
 
 def get() -> set[str]:
@@ -41,11 +43,10 @@ async def remove(chat_id: str) -> None:
 
 
 async def reload() -> None:
-    print("[CHATS] reload tick")
     r = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
     stored = await r.smembers(_CHATS_KEY)
     await r.aclose()
     if stored != _chats:
         _chats.clear()
         _chats.update(stored)
-        print(f"[CHATS] Обновлён список: {_chats or 'пусто (debug-режим)'}")
+        log.info("список чатов обновлён", monitored=list(_chats) or "пусто (debug-режим)")

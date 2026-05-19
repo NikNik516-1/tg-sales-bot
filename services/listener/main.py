@@ -1,9 +1,12 @@
 import asyncio
+from logger import setup
 from pyrogram import Client
 from config import TG_API_ID, TG_API_HASH, TG_SESSION_STRING
 import chat_manager
 import listener
 from mq import get_connection, consume, QUEUE_OUTGOING
+
+log = setup("listener")
 
 
 async def _reload_chats_loop():
@@ -12,18 +15,18 @@ async def _reload_chats_loop():
         try:
             await chat_manager.reload()
         except Exception as e:
-            print(f"[CHATS] Ошибка reload: {e}")
+            log.error("ошибка перезагрузки чатов", error=str(e))
 
 
 async def main():
-    print("[BOOT] Загрузка списка групп...")
+    log.info("загрузка списка групп")
     await chat_manager.load()
 
-    print("[BOOT] Подключение к RabbitMQ...")
+    log.info("подключение к RabbitMQ")
     mq_conn = await get_connection()
     listener.set_mq_connection(mq_conn)
 
-    print("[BOOT] Подключение к Telegram...")
+    log.info("подключение к Telegram")
     tg_app = Client(
         "seller",
         api_id=TG_API_ID,
@@ -34,8 +37,8 @@ async def main():
 
     async with tg_app:
         me = await tg_app.get_me()
-        print(f"[BOOT] Запущен как @{me.username} (id={me.id})")
-        print("[BOOT] Слушаю сообщения...")
+        log.info("telegram запущен", username=me.username, tg_id=me.id)
+        log.info("слушаю сообщения")
 
         asyncio.create_task(_reload_chats_loop())
 
