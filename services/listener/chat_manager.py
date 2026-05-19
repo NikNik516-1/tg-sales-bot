@@ -2,18 +2,22 @@ import redis.asyncio as aioredis
 from config import REDIS_HOST, REDIS_PORT, MONITORED_CHATS
 
 _CHATS_KEY = "monitored_chats"
+_INIT_FLAG = "monitored_chats:initialized"
 _chats: set[str] = set()
 
 
 async def load() -> None:
     r = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
-    stored = await r.smembers(_CHATS_KEY)
-    if stored:
+    initialized = await r.exists(_INIT_FLAG)
+    if initialized:
+        stored = await r.smembers(_CHATS_KEY)
         _chats.update(stored)
     else:
+        # Первый запуск — засеять из .env и выставить флаг
         _chats.update(MONITORED_CHATS)
         if MONITORED_CHATS:
             await r.sadd(_CHATS_KEY, *MONITORED_CHATS)
+        await r.set(_INIT_FLAG, "1")
     await r.aclose()
     print(f"[CHATS] Мониторинг: {_chats or 'debug-режим'}")
 
