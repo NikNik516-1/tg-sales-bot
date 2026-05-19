@@ -167,6 +167,11 @@ docker compose up -d
 **Nginx:** добавлен location в `/etc/nginx/sites-enabled/antilopa-gnu-ru.conf`:
 - `https://antilopa-gnu.ru/tg-sales-bot/adminka/` → `http://127.0.0.1:8082/`
 
+## SSH-реквизиты
+
+Пароль, plink-команды и параметры сервера — в `C:\delete\claudedevops\CLAUDE.md`.
+Не хранить credentials в этом репозитории.
+
 ## Kubernetes (k3s) — Фаза 6
 
 Манифесты в `k8s/`. Deploy workflow автоматически переключается на k3s если namespace `tg-sales-bot` существует, иначе падает в docker-compose fallback.
