@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Управление группами</h1>
+
+<div class="card">
+  <h2>Добавить группу вручную</h2>
+  <form method="post" action="/groups/add" class="row">
+    <input type="text" name="chat_id" placeholder="-1001234567890" required>
+    <button type="submit" class="btn btn-success">Добавить</button>
+  </form>
+  <div style="margin-top:10px; font-size:12px; color:#94a3b8;">
+    ID группы можно найти в таблице ниже — бот автоматически замечает все чаты, в которых состоит аккаунт.
+  </div>
+</div>
+
+<div class="card" style="padding:0; overflow:hidden;">
+  <div style="padding:16px 20px; border-bottom:1px solid #f1f5f9;">
+    <h2 style="margin:0;">Мониторируемые группы ({{ monitored|length }})</h2>
+  </div>
+  {% if monitored %}
+  <table>
+    <thead>
+      <tr><th>Chat ID</th><th>Тип</th><th>Название</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for chat_id in monitored|sort %}
+      {% set info = seen.get(chat_id, {}) %}
+      <tr>
+        <td><code>{{ chat_id }}</code></td>
+        <td style="color:#64748b; font-size:13px;">{{ info.get('type', '—') or '—' }}</td>
+        <td style="color:#334155;">
+          {% if info.get('title') %}{{ info.title }}{% else %}<span style="color:#94a3b8;">—</span>{% endif %}
+        </td>
+        <td style="text-align:right;">
+          <form method="post" action="/groups/remove" onsubmit="return confirm('Убрать {{ info.title or chat_id }} из мониторинга?')">
+            <input type="hidden" name="chat_id" value="{{ chat_id }}">
+            <button class="btn btn-danger">Убрать</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">Нет мониторируемых групп — бот в debug-режиме</div>
+  {% endif %}
+</div>
+
+{% set new_seen = [] %}
+{% for chat_id, info in seen.items() %}
+  {% if chat_id not in monitored %}{% set _ = new_seen.append((chat_id, info)) %}{% endif %}
+{% endfor %}
+
+{% if new_seen %}
+<div class="card" style="padding:0; overflow:hidden;">
+  <div style="padding:16px 20px; border-bottom:1px solid #f1f5f9;">
+    <h2 style="margin:0;">Замеченные группы — не мониторируются ({{ new_seen|length }})</h2>
+  </div>
+  <table>
+    <thead>
+      <tr><th>Chat ID</th><th>Название</th><th>Username</th><th>Первое сообщение</th><th></th></tr>
+    </thead>
+    <tbody>
+      {% for chat_id, info in new_seen %}
+      <tr>
+        <td><code>{{ chat_id }}</code></td>
+        <td>{{ info.title or '—' }}</td>
+        <td>{{ ('@' + info.username) if info.username else '—' }}</td>
+        <td style="color:#64748b; font-size:13px;">{{ info.first_seen or '—' }}</td>
+        <td>
+          <form method="post" action="/groups/add">
+            <input type="hidden" name="chat_id" value="{{ chat_id }}">
+            <button class="btn btn-success">Мониторить</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% elif seen %}
+<div class="card"><div class="empty" style="padding:20px;">Все замеченные группы уже мониторируются.</div></div>
+{% endif %}
+{% endblock %}
