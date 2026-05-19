@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timezone
 import redis.asyncio as aioredis
 from config import REDIS_HOST, REDIS_PORT
 
@@ -28,8 +29,29 @@ async def get_history(user_id: int) -> list[dict]:
 
 async def append_history(user_id: int, role: str, content: str) -> None:
     history = await get_history(user_id)
-    history.append({"role": role, "content": content})
+    history.append({
+        "role": role,
+        "content": content,
+        "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    })
     await get_redis().setex(f"history:{user_id}", STATE_TTL, json.dumps(history, ensure_ascii=False))
+
+
+USER_INFO_TTL = 86400 * 30  # 30 дней
+
+
+async def save_user_info(user_id: int, username: str, first_name: str, last_name: str) -> None:
+    info = json.dumps({
+        "username": username,
+        "first_name": first_name,
+        "last_name": last_name,
+    }, ensure_ascii=False)
+    await get_redis().setex(f"user_info:{user_id}", USER_INFO_TTL, info)
+
+
+async def get_user_info(user_id: int) -> dict:
+    data = await get_redis().get(f"user_info:{user_id}")
+    return json.loads(data) if data else {}
 
 
 async def clear_user(user_id: int) -> None:

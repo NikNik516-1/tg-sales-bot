@@ -6,6 +6,7 @@ import rag
 import listener
 import chat_manager
 from admin_server import app as admin_app
+import admin_server
 
 
 async def main():
@@ -24,6 +25,7 @@ async def main():
     )
 
     listener.register(tg_app)
+    admin_server.set_tg_client(tg_app)
 
     config = uvicorn.Config(admin_app, host="0.0.0.0", port=8080, log_level="warning")
     server = uvicorn.Server(config)

@@ -41,7 +41,7 @@ async def generate_reply(
 ) -> str:
     context_block = f"\n\nБаза знаний:\n{rag_context}" if rag_context else ""
     messages = [{"role": "system", "content": _SYSTEM_SALES + context_block}]
-    messages.extend(history[-12:])
+    messages.extend({"role": m["role"], "content": m["content"]} for m in history[-12:])
 
     if is_opening:
         messages.append({
@@ -51,19 +51,19 @@ async def generate_reply(
                 "Это твой шанс начать продажу — напиши первое сообщение в личку."
             ),
         })
+    else:
+        messages.append({"role": "user", "content": user_message})
 
     response = await _client.chat.completions.create(
         model=OPENAI_MODEL,
         messages=messages,
-        max_tokens=350,
-        temperature=0.75,
     )
     return response.choices[0].message.content.strip()
 
 
 async def is_agreement(user_message: str, history: list[dict]) -> bool:
     messages = [{"role": "system", "content": _SYSTEM_JUDGE}]
-    messages.extend(history[-8:])
+    messages.extend({"role": m["role"], "content": m["content"]} for m in history[-8:])
     messages.append({
         "role": "user",
         "content": f"Последнее сообщение: «{user_message}». Пользователь согласился купить?",
@@ -72,7 +72,5 @@ async def is_agreement(user_message: str, history: list[dict]) -> bool:
     response = await _client.chat.completions.create(
         model=OPENAI_MODEL,
         messages=messages,
-        max_tokens=5,
-        temperature=0,
     )
     return response.choices[0].message.content.strip().lower().startswith("yes")

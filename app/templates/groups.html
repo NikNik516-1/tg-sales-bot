@@ -20,14 +20,19 @@
   {% if monitored %}
   <table>
     <thead>
-      <tr><th>Chat ID</th><th></th></tr>
+      <tr><th>Chat ID</th><th>Тип</th><th>Название</th><th></th></tr>
     </thead>
     <tbody>
       {% for chat_id in monitored|sort %}
+      {% set info = seen.get(chat_id, {}) %}
       <tr>
         <td><code>{{ chat_id }}</code></td>
+        <td style="color:#64748b; font-size:13px;">{{ info.get('type', '—') or '—' }}</td>
+        <td style="color:#334155;">
+          {% if info.get('title') %}{{ info.title }}{% else %}<span style="color:#94a3b8;">—</span>{% endif %}
+        </td>
         <td style="text-align:right;">
-          <form method="post" action="/groups/remove" onsubmit="return confirm('Убрать {{ chat_id }} из мониторинга?')">
+          <form method="post" action="/groups/remove" onsubmit="return confirm('Убрать {{ info.title or chat_id }} из мониторинга?')">
             <input type="hidden" name="chat_id" value="{{ chat_id }}">
             <button class="btn btn-danger">Убрать</button>
           </form>
