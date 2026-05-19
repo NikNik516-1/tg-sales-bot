@@ -166,3 +166,51 @@ docker compose up -d
 
 **Nginx:** добавлен location в `/etc/nginx/sites-enabled/antilopa-gnu-ru.conf`:
 - `https://antilopa-gnu.ru/tg-sales-bot/adminka/` → `http://127.0.0.1:8082/`
+
+## Kubernetes (k3s) — Фаза 6
+
+Манифесты в `k8s/`. Deploy workflow автоматически переключается на k3s если namespace `tg-sales-bot` существует, иначе падает в docker-compose fallback.
+
+**Bootstrap k3s на VPS (один раз, вручную):**
+```bash
+# 1. Установить k3s (Traefik отключён — nginx остаётся фронтом)
+curl -sfL https://get.k3s.io | sh -s - --disable=traefik
+
+# 2. Настроить kubectl для пользователя claude
+mkdir -p ~/.kube
+sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+sudo chown claude:claude ~/.kube/config
+
+# 3. Создать namespace
+kubectl apply -f /var/develop/tg-sales-bot/k8s/00-namespace.yaml
+
+# 4. Создать Secret из значений .env (один раз, не в git!)
+cp /var/develop/tg-sales-bot/k8s/secret.template.yaml /var/develop/tg-sales-bot/k8s/secret.yaml
+# Заполнить значения в secret.yaml из /var/develop/tg-sales-bot/.env
+kubectl apply -f /var/develop/tg-sales-bot/k8s/secret.yaml
+
+# 5. Остановить docker-compose (k3s берёт порт 8082 через hostPort)
+cd /var/develop/tg-sales-bot && docker compose down
+
+# 6. Следующий деплой (merge в main) автоматически применит k8s/
+```
+
+**Загрузка базы знаний после миграции на k3s:**
+```bash
+# data/ монтируется как hostPath — ingest запускается так же
+CHROMA_HOST=localhost python3 /var/develop/tg-sales-bot/scripts/ingest.py
+```
+
+**Полезные команды kubectl:**
+```bash
+kubectl get pods -n tg-sales-bot
+kubectl logs -f deployment/ai-worker -n tg-sales-bot
+kubectl rollout restart deployment/ai-worker -n tg-sales-bot
+kubectl get hpa -n tg-sales-bot       # HorizontalPodAutoscaler для ai-worker
+kubectl describe pod -n tg-sales-bot   # диагностика
+```
+
+**Ingress + TLS (Фаза 6.3, пока не активирован):**
+Файл `k8s/20-ingress.yaml` — cert-manager + Let's Encrypt + Traefik.
+Перед применением: установить cert-manager и убрать nginx с портов 80/443.
+Когда готово — добавить `20-ingress.yaml` в `k8s/kustomization.yaml`.
