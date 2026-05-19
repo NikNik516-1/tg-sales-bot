@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Мониторинг каналов</h1>
+
+<div class="card">
+  <p style="font-size:14px; color:#64748b; margin:0;">
+    Бот автоматически замечает каналы, в которых состоит аккаунт.
+    Нажмите «Мониторить» — система найдёт группу обсуждений канала и добавит её в мониторинг.
+    После этого комментарии с ключевыми словами будут запускать диалог в личке.
+  </p>
+</div>
+
+{% if channels %}
+<div class="card" style="padding:0; overflow:hidden;">
+  <div style="padding:16px 20px; border-bottom:1px solid #f1f5f9;">
+    <h2 style="margin:0;">Замеченные каналы ({{ channels|length }})</h2>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>Название</th>
+        <th>Username</th>
+        <th>Группа обсуждений</th>
+        <th>Первое сообщение</th>
+        <th>Статус</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for ch in channels %}
+      <tr>
+        <td>{{ ch.title or ch.channel_id }}</td>
+        <td>{{ ('@' + ch.username) if ch.username else '—' }}</td>
+        <td>
+          {% if ch.linked_group_id %}
+            <code>{{ ch.linked_group_id }}</code>
+          {% else %}
+            <span style="color:#94a3b8; font-size:12px;">нет обсуждения</span>
+          {% endif %}
+        </td>
+        <td style="color:#64748b; font-size:13px;">{{ ch.first_seen or '—' }}</td>
+        <td>
+          {% if ch.is_monitored %}
+            <span class="badge badge-agreed">Мониторируется</span>
+          {% elif ch.linked_group_id %}
+            <span class="badge badge-none">Не мониторируется</span>
+          {% else %}
+            <span class="badge badge-none">Нет обсуждения</span>
+          {% endif %}
+        </td>
+        <td style="text-align:right;">
+          {% if ch.linked_group_id %}
+            {% if ch.is_monitored %}
+              <form method="post" action="{{ request.url_for('unmonitor_channel') }}"
+                    onsubmit="return confirm('Убрать мониторинг комментариев {{ ch.title or ch.channel_id }}?')">
+                <input type="hidden" name="channel_id" value="{{ ch.channel_id }}">
+                <button class="btn btn-danger">Убрать</button>
+              </form>
+            {% else %}
+              <form method="post" action="{{ request.url_for('monitor_channel') }}">
+                <input type="hidden" name="channel_id" value="{{ ch.channel_id }}">
+                <button class="btn btn-success">Мониторить</button>
+              </form>
+            {% endif %}
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="card">
+  <div class="empty">
+    Бот ещё не видел ни одного канала.<br>
+    <span style="font-size:12px; margin-top:6px; display:block;">
+      Как только аккаунт получит сообщение из канала — он появится здесь автоматически.
+    </span>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

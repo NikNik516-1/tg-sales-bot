@@ -1,0 +1,183 @@
+import json
+import asyncio
+from datetime import datetime, timezone
+
+import redis.asyncio as aioredis
+from pyrogram import Client, filters
+from pyrogram.enums import ChatType
+from pyrogram.types import Message
+from pyrogram.errors import UserIsBlocked, InputUserDeactivated, PeerIdInvalid
+
+from config import ADMIN_TG_ID, REDIS_HOST, REDIS_PORT
+from state import get_state, set_state, clear_user
+from mq import publish, QUEUE_INCOMING, QUEUE_OUTGOING
+import chat_manager
+
+_mq_connection = None
+
+
+def set_mq_connection(conn) -> None:
+    global _mq_connection
+    _mq_connection = conn
+
+
+async def _send_safe(client: Client, user_id: int, text: str) -> bool:
+    try:
+        await client.send_message(user_id, text)
+        return True
+    except (UserIsBlocked, InputUserDeactivated, PeerIdInvalid) as e:
+        print(f"[DM] Не удалось отправить {user_id}: {e}")
+        return False
+
+
+async def _log_seen_channel(client: Client, message: Message) -> None:
+    channel_id = str(message.chat.id)
+    r = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+    if await r.hexists("seen_channels", channel_id):
+        await r.aclose()
+        return
+
+    linked_group_id = None
+    try:
+        chat = await client.get_chat(message.chat.id)
+        if chat.linked_chat:
+            linked_group_id = str(chat.linked_chat.id)
+    except Exception as e:
+        print(f"[CHANNEL] Не удалось получить linked_chat для {channel_id}: {e}")
+
+    info = json.dumps({
+        "title": message.chat.title or "",
+        "username": message.chat.username or "",
+        "linked_group_id": linked_group_id,
+        "first_seen": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+    }, ensure_ascii=False)
+    await r.hsetnx("seen_channels", channel_id, info)
+    await r.aclose()
+
+
+_CHAT_TYPE_DISPLAY = {
+    ChatType.CHANNEL: "Канал",
+    ChatType.SUPERGROUP: "Супергруппа",
+    ChatType.GROUP: "Группа",
+}
+
+
+async def _log_seen_chat(message: Message) -> None:
+    chat_id = str(message.chat.id)
+    if chat_id in chat_manager.get():
+        return
+    r = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+    info = json.dumps({
+        "title": message.chat.title or "",
+        "username": message.chat.username or "",
+        "type": _CHAT_TYPE_DISPLAY.get(message.chat.type, ""),
+        "first_seen": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+    }, ensure_ascii=False)
+    await r.hsetnx("seen_chats", chat_id, info)
+    await r.aclose()
+
+
+def _in_monitored_chat(_, __, message: Message) -> bool:
+    chats = chat_manager.get()
+    if not chats:
+        print(f"[DEBUG] chat_id={message.chat.id}  username={message.chat.username}")
+        return False
+    chat_id = str(message.chat.id)
+    username = message.chat.username or ""
+    return chat_id in chats or username in chats
+
+
+def _has_keyword(_, __, message: Message) -> bool:
+    from config import KEYWORDS
+    if not message.text:
+        return False
+    text = message.text.lower()
+    return any(kw in text for kw in KEYWORDS)
+
+
+monitored_chat = filters.create(_in_monitored_chat)
+has_keyword = filters.create(_has_keyword)
+
+
+async def handle_outgoing(client: Client, payload: dict) -> None:
+    """Обработчик сообщений из очереди tg.outgoing (ответы от ai-worker)."""
+    user_id = payload["user_id"]
+    text = payload.get("text", "")
+
+    if payload.get("notify_admin"):
+        await _send_safe(client, ADMIN_TG_ID, payload.get("admin_text", ""))
+
+    if text:
+        await _send_safe(client, user_id, text)
+
+
+def register(app: Client):
+
+    @app.on_message(monitored_chat & has_keyword & ~filters.me)
+    async def on_keyword(client: Client, message: Message):
+        user_id = message.from_user.id
+        state = await get_state(user_id)
+
+        if state == "pitching":
+            print(f"[KEYWORD] продолжение диалога user_id={user_id}")
+            await publish(_mq_connection, QUEUE_INCOMING, {
+                "user_id": user_id,
+                "text": f"[Группа] {message.text}",
+                "is_opening": False,
+                "from_user": {
+                    "username": message.from_user.username or "",
+                    "first_name": message.from_user.first_name or "",
+                    "last_name": message.from_user.last_name or "",
+                },
+            })
+            return
+
+        if state:
+            return
+
+        print(f"[KEYWORD] новый user_id={user_id}")
+        await set_state(user_id, "pitching")
+        await publish(_mq_connection, QUEUE_INCOMING, {
+            "user_id": user_id,
+            "text": message.text,
+            "is_opening": True,
+            "from_user": {
+                "username": message.from_user.username or "",
+                "first_name": message.from_user.first_name or "",
+                "last_name": message.from_user.last_name or "",
+            },
+        })
+
+    @app.on_message(filters.private & filters.command("reset") & ~filters.me)
+    async def on_reset(client: Client, message: Message):
+        user_id = message.from_user.id
+        await clear_user(user_id)
+        await message.reply("Диалог сброшен. Можете начать заново.")
+        print(f"[RESET] user_id={user_id}")
+
+    @app.on_message(filters.private & ~filters.me)
+    async def on_private(client: Client, message: Message):
+        if not message.text:
+            return
+        user_id = message.from_user.id
+        state = await get_state(user_id)
+        if state != "pitching":
+            return
+        await publish(_mq_connection, QUEUE_INCOMING, {
+            "user_id": user_id,
+            "text": message.text,
+            "is_opening": False,
+            "from_user": {
+                "username": message.from_user.username or "",
+                "first_name": message.from_user.first_name or "",
+                "last_name": message.from_user.last_name or "",
+            },
+        })
+
+    @app.on_message(filters.group & ~filters.me, group=1)
+    async def on_any_group(client: Client, message: Message):
+        asyncio.create_task(_log_seen_chat(message))
+
+    @app.on_message(filters.channel & ~filters.me, group=1)
+    async def on_any_channel(client: Client, message: Message):
+        asyncio.create_task(_log_seen_channel(client, message))
