@@ -41,6 +41,7 @@ async def remove(chat_id: str) -> None:
 
 
 async def reload() -> None:
+    print("[CHATS] reload tick")
     r = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
     stored = await r.smembers(_CHATS_KEY)
     await r.aclose()

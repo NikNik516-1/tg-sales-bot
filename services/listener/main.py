@@ -6,6 +6,15 @@ import listener
 from mq import get_connection, consume, QUEUE_OUTGOING
 
 
+async def _reload_chats_loop():
+    while True:
+        await asyncio.sleep(60)
+        try:
+            await chat_manager.reload()
+        except Exception as e:
+            print(f"[CHATS] Ошибка reload: {e}")
+
+
 async def main():
     print("[BOOT] Загрузка списка групп...")
     await chat_manager.load()
@@ -28,7 +37,8 @@ async def main():
         print(f"[BOOT] Запущен как @{me.username} (id={me.id})")
         print("[BOOT] Слушаю сообщения...")
 
-        # Читаем ответы от ai-worker и отправляем в Telegram
+        asyncio.create_task(_reload_chats_loop())
+
         async def outgoing_handler(payload: dict) -> None:
             await listener.handle_outgoing(tg_app, payload)
 
