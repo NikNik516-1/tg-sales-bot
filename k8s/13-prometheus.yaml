@@ -37,6 +37,8 @@ spec:
         - --config.file=/etc/prometheus/prometheus.yml
         - --storage.tsdb.path=/prometheus
         - --storage.tsdb.retention.time=15d
+        - --web.external-url=https://antilopa-gnu.ru/tg-sales-bot/prometheus/
+        - --web.route-prefix=/tg-sales-bot/prometheus
         ports:
         - containerPort: 9090
           hostPort: 9090
