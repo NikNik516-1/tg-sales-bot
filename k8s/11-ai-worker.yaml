@@ -38,6 +38,19 @@ spec:
       imagePullSecrets:
       - name: ghcr-secret
 ---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-worker-metrics
+  namespace: tg-sales-bot
+spec:
+  selector:
+    app: ai-worker
+  ports:
+  - name: metrics
+    port: 9090
+    targetPort: 9090
+---
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:

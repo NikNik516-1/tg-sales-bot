@@ -6,6 +6,7 @@ from ai_client import generate_reply, is_agreement
 from mq import get_connection, publish, consume, QUEUE_INCOMING, QUEUE_OUTGOING
 from config import ADMIN_TG_ID
 import rag
+import metrics
 
 log = setup("ai-worker")
 
@@ -61,7 +62,11 @@ async def process_message(payload: dict) -> None:
 
     except Exception as e:
         log.error("ошибка обработки сообщения", user_id=user_id, error=str(e))
+        metrics.messages_errors_total.inc()
         await _publish_response(user_id, "Я чуть-чуть сломался и не могу ответить прямо сейчас. Напишите ещё раз — попробую снова.")
+        return
+
+    metrics.messages_processed_total.inc()
 
 
 _mq_connection = None
@@ -79,11 +84,17 @@ async def _publish_response(user_id: int, text: str, notify_admin: bool = False,
 async def main():
     global _mq_connection
 
+    metrics.start(9090)
+
     log.info("инициализация RAG")
     rag.init()
 
     log.info("подключение к RabbitMQ")
     _mq_connection = await get_connection()
+
+    asyncio.create_task(
+        metrics.poll_queue_lengths(_mq_connection, [QUEUE_INCOMING, QUEUE_OUTGOING])
+    )
 
     log.info("ai-worker готов")
     await consume(_mq_connection, QUEUE_INCOMING, process_message)

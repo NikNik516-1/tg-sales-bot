@@ -8,5 +8,6 @@ resources:
 - 10-listener.yaml
 - 11-ai-worker.yaml
 - 12-admin.yaml
+- 13-prometheus.yaml
 # 20-ingress.yaml — подключить после установки cert-manager (Фаза 6.3)
 # secret.yaml    — создать вручную из secret.template.yaml, НЕ в git
