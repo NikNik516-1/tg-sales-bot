@@ -39,8 +39,8 @@
           </div>
         </td>
         <td style="white-space:nowrap;">
-          <a href="/history/{{ d.user_id }}" class="btn btn-primary">История</a>
-          <form method="post" action="/clear/{{ d.user_id }}" onsubmit="return confirm('Сбросить диалог с {{ d.display_name or d.user_id }}?')">
+          <a href="{{ request.url_for('view_history', user_id=d.user_id) }}" class="btn btn-primary">История</a>
+          <form method="post" action="{{ request.url_for('clear_dialog', user_id=d.user_id) }}" onsubmit="return confirm('Сбросить диалог с {{ d.display_name or d.user_id }}?')">
             <button class="btn btn-danger">Сброс</button>
           </form>
         </td>

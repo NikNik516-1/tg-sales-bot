@@ -1,4 +1,5 @@
 version: '3.9'
+name: cl_tg-sales-bot
 
 services:
   chromadb:
@@ -6,7 +7,7 @@ services:
     environment:
       - ANONYMIZED_TELEMETRY=False
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     volumes:
       - chroma_data:/chroma/chroma
     networks:
@@ -35,8 +36,8 @@ services:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
     ports:
-      - "5672:5672"
-      - "15672:15672"   # Management UI
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"   # Management UI
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
     networks:
@@ -88,7 +89,7 @@ services:
         condition: service_healthy
     env_file: .env
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8082:8080"
     networks:
       - bot_net
     restart: unless-stopped

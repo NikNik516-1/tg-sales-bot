@@ -51,13 +51,13 @@
         <td style="text-align:right;">
           {% if ch.linked_group_id %}
             {% if ch.is_monitored %}
-              <form method="post" action="/channels/unmonitor"
+              <form method="post" action="{{ request.url_for('unmonitor_channel') }}"
                     onsubmit="return confirm('Убрать мониторинг комментариев {{ ch.title or ch.channel_id }}?')">
                 <input type="hidden" name="channel_id" value="{{ ch.channel_id }}">
                 <button class="btn btn-danger">Убрать</button>
               </form>
             {% else %}
-              <form method="post" action="/channels/monitor">
+              <form method="post" action="{{ request.url_for('monitor_channel') }}">
                 <input type="hidden" name="channel_id" value="{{ ch.channel_id }}">
                 <button class="btn btn-success">Мониторить</button>
               </form>

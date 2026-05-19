@@ -4,10 +4,10 @@
   <h1 style="margin:0;">Диалог с <code>{{ user_id }}</code></h1>
   <span class="badge badge-{{ state or 'none' }}">{{ state or 'нет состояния' }}</span>
   <div style="margin-left:auto;" class="row">
-    <form method="post" action="/clear/{{ user_id }}" onsubmit="return confirm('Сбросить диалог?')">
+    <form method="post" action="{{ request.url_for('clear_dialog', user_id=user_id) }}" onsubmit="return confirm('Сбросить диалог?')">
       <button class="btn btn-danger">Сбросить диалог</button>
     </form>
-    <a href="/" class="btn btn-gray">← Назад</a>
+    <a href="{{ request.url_for('dashboard') }}" class="btn btn-gray">← Назад</a>
   </div>
 </div>
 

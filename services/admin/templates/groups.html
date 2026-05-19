@@ -4,7 +4,7 @@
 
 <div class="card">
   <h2>Добавить группу вручную</h2>
-  <form method="post" action="/groups/add" class="row">
+  <form method="post" action="{{ request.url_for('add_group') }}" class="row">
     <input type="text" name="chat_id" placeholder="-1001234567890" required>
     <button type="submit" class="btn btn-success">Добавить</button>
   </form>
@@ -32,7 +32,7 @@
           {% if info.get('title') %}{{ info.title }}{% else %}<span style="color:#94a3b8;">—</span>{% endif %}
         </td>
         <td style="text-align:right;">
-          <form method="post" action="/groups/remove" onsubmit="return confirm('Убрать {{ info.title or chat_id }} из мониторинга?')">
+          <form method="post" action="{{ request.url_for('remove_group') }}" onsubmit="return confirm('Убрать {{ info.title or chat_id }} из мониторинга?')">
             <input type="hidden" name="chat_id" value="{{ chat_id }}">
             <button class="btn btn-danger">Убрать</button>
           </form>
@@ -68,7 +68,7 @@
         <td>{{ ('@' + info.username) if info.username else '—' }}</td>
         <td style="color:#64748b; font-size:13px;">{{ info.first_seen or '—' }}</td>
         <td>
-          <form method="post" action="/groups/add">
+          <form method="post" action="{{ request.url_for('add_group') }}">
             <input type="hidden" name="chat_id" value="{{ chat_id }}">
             <button class="btn btn-success">Мониторить</button>
           </form>

@@ -1,4 +1,5 @@
 import json
+import os
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -7,7 +8,7 @@ from config import REDIS_HOST, REDIS_PORT
 import chat_manager
 from state import get_all_active_users, get_history, get_state, clear_user, get_user_info
 
-app = FastAPI(title="ПенШоп Админка")
+app = FastAPI(title="ПенШоп Админка", root_path=os.environ.get("ROOT_PATH", ""))
 templates = Jinja2Templates(directory="templates")
 
 _tg_client = None
@@ -64,9 +65,9 @@ async def view_history(request: Request, user_id: int):
 
 
 @app.post("/clear/{user_id}")
-async def clear_dialog(user_id: int):
+async def clear_dialog(request: Request, user_id: int):
     await clear_user(user_id)
-    return RedirectResponse("/", status_code=303)
+    return RedirectResponse(url=request.url_for("dashboard"), status_code=303)
 
 
 @app.get("/groups", response_class=HTMLResponse)
@@ -83,15 +84,15 @@ async def groups_page(request: Request):
 
 
 @app.post("/groups/add")
-async def add_group(chat_id: str = Form(...)):
+async def add_group(request: Request, chat_id: str = Form(...)):
     await chat_manager.add(chat_id.strip())
-    return RedirectResponse("/groups", status_code=303)
+    return RedirectResponse(url=request.url_for("groups_page"), status_code=303)
 
 
 @app.post("/groups/remove")
-async def remove_group(chat_id: str = Form(...)):
+async def remove_group(request: Request, chat_id: str = Form(...)):
     await chat_manager.remove(chat_id.strip())
-    return RedirectResponse("/groups", status_code=303)
+    return RedirectResponse(url=request.url_for("groups_page"), status_code=303)
 
 
 @app.get("/channels", response_class=HTMLResponse)
@@ -118,7 +119,7 @@ async def channels_page(request: Request):
 
 
 @app.post("/channels/monitor")
-async def monitor_channel(channel_id: str = Form(...)):
+async def monitor_channel(request: Request, channel_id: str = Form(...)):
     r = _redis()
     raw = await r.hget("seen_channels", channel_id)
     await r.aclose()
@@ -140,11 +141,11 @@ async def monitor_channel(channel_id: str = Form(...)):
 
     if linked_group_id:
         await chat_manager.add(linked_group_id)
-    return RedirectResponse("/channels", status_code=303)
+    return RedirectResponse(url=request.url_for("channels_page"), status_code=303)
 
 
 @app.post("/channels/unmonitor")
-async def unmonitor_channel(channel_id: str = Form(...)):
+async def unmonitor_channel(request: Request, channel_id: str = Form(...)):
     r = _redis()
     raw = await r.hget("seen_channels", channel_id)
     await r.aclose()
@@ -153,4 +154,4 @@ async def unmonitor_channel(channel_id: str = Form(...)):
         linked_group_id = info.get("linked_group_id")
         if linked_group_id:
             await chat_manager.remove(linked_group_id)
-    return RedirectResponse("/channels", status_code=303)
+    return RedirectResponse(url=request.url_for("channels_page"), status_code=303)
