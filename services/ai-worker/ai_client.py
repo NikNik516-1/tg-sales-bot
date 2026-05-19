@@ -40,20 +40,41 @@ async def generate_reply(
     history: list[dict],
     rag_context: str,
     is_opening: bool = False,
+    is_returning: bool = False,
+    user_profile: str = "",
 ) -> str:
     context_block = f"\n\nБаза знаний:\n{rag_context}" if rag_context else ""
     messages = [{"role": "system", "content": _SYSTEM_SALES + context_block}]
     messages.extend({"role": m["role"], "content": m["content"]} for m in history[-12:])
 
     if is_opening:
-        messages.append({
-            "role": "user",
-            "content": (
-                f"Пользователь написал в группе: «{user_message}».\n"
-                "Это твой шанс начать продажу — напиши первое сообщение в личку. "
-                "Представься как «личный помощник Николая» и предложи помочь с выбором ручки."
-            ),
-        })
+        profile_block = f"\n\nПрофиль клиента:\n{user_profile}" if user_profile else ""
+        if is_returning:
+            content = (
+                f"Пользователь снова написал в группе: «{user_message}».{profile_block}\n"
+                "Он уже был клиентом — ты с ним уже работал и он делал покупку. "
+                "Напиши радостное приветственное сообщение в личку: порадуйся возвращению, "
+                "можно с лёгким юмором. Затем предложи помочь с выбором."
+            )
+        else:
+            if user_profile:
+                content = (
+                    f"Пользователь написал в группе: «{user_message}».\n\n"
+                    f"Профиль клиента:\n{user_profile}\n\n"
+                    "Напиши первое сообщение в личку. Правила:\n"
+                    "1. Обращайся по имени-отчеству (если оба есть в профиле) — не просто по имени.\n"
+                    "2. ОБЯЗАТЕЛЬНО сделай одну юмористическую фразу, обыгрывающую конкретный факт из профиля. "
+                    "Фраза должна быть связана с ручками или покупкой — это твой крючок.\n"
+                    "3. После шутки представься как «личный помощник Николая» и предложи помочь с выбором ручки.\n"
+                    "Не перегружай — всё сообщение 3–4 предложения."
+                )
+            else:
+                content = (
+                    f"Пользователь написал в группе: «{user_message}».\n"
+                    "Это твой шанс начать продажу — напиши первое сообщение в личку. "
+                    "Представься как «личный помощник Николая» и предложи помочь с выбором ручки."
+                )
+        messages.append({"role": "user", "content": content})
     else:
         messages.append({"role": "user", "content": user_message})
 

@@ -7,6 +7,7 @@ from mq import get_connection, publish, consume, QUEUE_INCOMING, QUEUE_OUTGOING
 from config import ADMIN_TG_ID
 import rag
 import metrics
+import user_profile
 
 log = setup("ai-worker")
 
@@ -15,6 +16,7 @@ async def process_message(payload: dict) -> None:
     user_id = payload["user_id"]
     text = payload["text"]
     is_opening = payload.get("is_opening", False)
+    is_returning = payload.get("is_returning", False)
     from_user = payload.get("from_user", {})
 
     try:
@@ -36,6 +38,13 @@ async def process_message(payload: dict) -> None:
                 log.info("сделка закрыта", user_id=user_id)
                 return
 
+        profile = ""
+        if is_opening:
+            profile = user_profile.lookup(
+                username=from_user.get("username", ""),
+                phone=from_user.get("phone", ""),
+            )
+
         rag_docs = rag.search(text)
         rag_context = "\n---\n".join(rag_docs)
         reply = await generate_reply(
@@ -43,6 +52,8 @@ async def process_message(payload: dict) -> None:
             history=history,
             rag_context=rag_context,
             is_opening=is_opening,
+            is_returning=is_returning,
+            user_profile=profile,
         )
 
         if is_opening:
@@ -88,6 +99,7 @@ async def main():
 
     log.info("инициализация RAG")
     rag.init()
+    user_profile.load()
 
     log.info("подключение к RabbitMQ")
     _mq_connection = await get_connection()

@@ -40,7 +40,7 @@ docker compose logs ai-worker -f
 docker exec clrosreestr-redis-1 redis-cli DEL "state:USER_ID" "history:USER_ID"
 ```
 
-Порты (все привязаны к localhost): `8082` — веб-админка, `15672` — RabbitMQ Management UI (guest/guest), `8000` — ChromaDB.
+Порты (все привязаны к localhost): `8082` — веб-админка, `15672` — RabbitMQ Management UI (guest/guest), `8000` — ChromaDB, `9090` — Prometheus, `3001` — Grafana.
 
 ## Загрузка базы знаний в ChromaDB
 
@@ -109,7 +109,12 @@ Telegram → listener → [RabbitMQ: tg.incoming] → ai-worker → [RabbitMQ: t
 
 ## Создание и мержинг PR
 
-`gh` CLI установлен (`winget install GitHub.cli`). Первый раз — авторизация:
+`gh` CLI установлен (`winget install GitHub.cli`), путь: `C:\Program Files\GitHub CLI\gh.exe`.
+В PowerShell доступен как `gh` после рестарта VS Code (PATH обновляется из реестра).
+В Git Bash PATH не подхватывается автоматически — использовать полный путь:
+`"/c/Program Files/GitHub CLI/gh.exe"`.
+
+Первый раз — авторизация:
 ```bash
 gh auth login   # выбрать GitHub.com → HTTPS → Login with a web browser
 ```
@@ -163,30 +168,36 @@ pytest -v
 
 **Сервер:** `77.83.87.29` (claude@), директория `/var/develop/tg-sales-bot/`
 
-**Первый деплой (bootstrap нового сервера):**
-```bash
-# На сервере
-git clone https://github.com/NikNik516-1/tg-sales-bot.git /var/develop/tg-sales-bot
-cd /var/develop/tg-sales-bot
-# Создать .env (не в git) с ROOT_PATH=/tg-sales-bot/adminka
-docker compose pull && docker compose up -d
-# Загрузить базу знаний
-CHROMA_HOST=localhost python3 scripts/ingest.py
-```
+**Текущий прод работает на k3s** (bootstrap выполнен). Docker-compose на VPS остановлен.
 
 **Обновление — через CI/CD (автоматически):**
-Смержить PR в `main` → GitHub Actions задеплоит сам.
+Смержить PR в `main` → GitHub Actions задеплоит сам (`kubectl apply -k k8s/ && rollout restart`).
 
 **Обновление — вручную (если CI/CD недоступен):**
 ```bash
 cd /var/develop/tg-sales-bot
 git pull origin main
-docker compose pull listener ai-worker admin
-docker compose up -d
+kubectl apply -k k8s/
+kubectl rollout restart deployment/listener deployment/ai-worker deployment/admin -n tg-sales-bot
 ```
+
+**Bootstrap нового сервера с нуля** (редкий случай — см. k8s-раздел ниже + `secret.template.yaml`).
 
 **Nginx:** добавлен location в `/etc/nginx/sites-enabled/antilopa-gnu-ru.conf`:
 - `https://antilopa-gnu.ru/tg-sales-bot/adminka/` → `http://127.0.0.1:8082/`
+- `https://antilopa-gnu.ru/tg-sales-bot/prometheus/` → `http://127.0.0.1:9090/tg-sales-bot/prometheus/`
+- `https://antilopa-gnu.ru/tg-sales-bot/grafana/` → `http://127.0.0.1:3001/tg-sales-bot/grafana/`
+
+## Мониторинг (Фаза 7)
+
+**Prometheus:** `https://antilopa-gnu.ru/tg-sales-bot/prometheus/` (без авторизации)
+**Grafana:** `https://antilopa-gnu.ru/tg-sales-bot/grafana/` (анонимный просмотр; логин admin/admin)
+
+Локально (docker-compose): Prometheus — `http://localhost:9090`, Grafana — `http://localhost:3001`.
+
+Метрики приложения: `gpt_response_seconds` (histogram, label `call`), `rabbitmq_queue_messages` (gauge, label `queue`), `ai_worker_messages_processed_total`, `ai_worker_messages_errors_total`.
+
+Provisioning Grafana: datasource и dashboard — через ConfigMap (k8s) или volume-mount (docker-compose). Изменения в UI не сохраняются — редактировать `k8s/14-grafana.yaml` → ConfigMap `grafana-dashboard`.
 
 ## SSH-реквизиты
 

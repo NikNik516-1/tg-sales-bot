@@ -114,6 +114,15 @@ async def handle_outgoing(client: Client, payload: dict) -> None:
         await _send_safe(client, user_id, text)
 
 
+def _from_user_info(from_user) -> dict:
+    return {
+        "username": from_user.username or "",
+        "first_name": from_user.first_name or "",
+        "last_name": from_user.last_name or "",
+        "phone": from_user.phone_number or "",
+    }
+
+
 def register(app: Client):
 
     @app.on_message(monitored_chat & has_keyword & ~filters.me)
@@ -129,11 +138,21 @@ def register(app: Client):
                 "user_id": user_id,
                 "text": f"[Группа] {message.text}",
                 "is_opening": False,
-                "from_user": {
-                    "username": message.from_user.username or "",
-                    "first_name": message.from_user.first_name or "",
-                    "last_name": message.from_user.last_name or "",
-                },
+                "is_returning": False,
+                "from_user": _from_user_info(message.from_user),
+            })
+            return
+
+        if state == "agreed":
+            log.info("клиент вернулся", user_id=user_id)
+            await clear_user(user_id)
+            await set_state(user_id, "pitching")
+            await publish(_mq_connection, QUEUE_INCOMING, {
+                "user_id": user_id,
+                "text": message.text,
+                "is_opening": True,
+                "is_returning": True,
+                "from_user": _from_user_info(message.from_user),
             })
             return
 
@@ -146,11 +165,8 @@ def register(app: Client):
             "user_id": user_id,
             "text": message.text,
             "is_opening": True,
-            "from_user": {
-                "username": message.from_user.username or "",
-                "first_name": message.from_user.first_name or "",
-                "last_name": message.from_user.last_name or "",
-            },
+            "is_returning": False,
+            "from_user": _from_user_info(message.from_user),
         })
 
     @app.on_message(filters.private & filters.command("reset") & ~filters.me)
@@ -172,11 +188,8 @@ def register(app: Client):
             "user_id": user_id,
             "text": message.text,
             "is_opening": False,
-            "from_user": {
-                "username": message.from_user.username or "",
-                "first_name": message.from_user.first_name or "",
-                "last_name": message.from_user.last_name or "",
-            },
+            "is_returning": False,
+            "from_user": _from_user_info(message.from_user),
         })
 
     @app.on_message(filters.group & ~filters.me, group=1)
