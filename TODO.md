@@ -61,14 +61,14 @@ docker compose up -d --build
 
 **`.github/workflows/ci.yml`** — на каждый push/PR:
 
-- [ ] 5.1 Lint: `ruff check .`
-- [ ] 5.2 Tests: `pytest` (написать 2-3 базовых теста)
-- [ ] 5.3 Build Docker images (проверка что собирается)
+- [x] 5.1 Lint: `ruff check .`
+- [x] 5.2 Tests: `pytest` (написать 2-3 базовых теста)
+- [x] 5.3 Build Docker images (проверка что собирается)
 
 **`.github/workflows/deploy.yml`** — только при merge в `main`:
 
-- [ ] 5.4 Build & push образов в `ghcr.io/niknik516-1/...`
-- [ ] 5.5 SSH на VPS → `docker compose pull && docker compose up -d`
+- [x] 5.4 Build & push образов в `ghcr.io/niknik516-1/...`
+- [x] 5.5 SSH на VPS → `docker compose pull && docker compose up -d`
 - [ ] 5.6 Telegram-уведомление об успешном деплое (опционально)
 
 ---
@@ -105,4 +105,4 @@ docker compose up -d --build
 ✅ Фаза 1 → ✅ Фаза 2 → ✅ Фаза 3 → Фаза 4 → Фаза 5 → Фаза 6 → Фаза 7
 ```
 
-Текущий статус: **Фаза 5 — GitHub Actions CI/CD**.
+Текущий статус: **Фаза 5 завершена → Фаза 6 — Kubernetes**.

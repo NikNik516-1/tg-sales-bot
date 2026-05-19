@@ -49,6 +49,7 @@ services:
       retries: 12
 
   listener:
+    image: ghcr.io/niknik516-1/tg-sales-bot/listener:latest
     build:
       context: .
       dockerfile: services/listener/Dockerfile
@@ -63,6 +64,7 @@ services:
     restart: unless-stopped
 
   ai-worker:
+    image: ghcr.io/niknik516-1/tg-sales-bot/ai-worker:latest
     build:
       context: .
       dockerfile: services/ai-worker/Dockerfile
@@ -81,6 +83,7 @@ services:
     restart: unless-stopped
 
   admin:
+    image: ghcr.io/niknik516-1/tg-sales-bot/admin:latest
     build:
       context: .
       dockerfile: services/admin/Dockerfile
