@@ -94,9 +94,37 @@ Telegram → listener → [RabbitMQ: tg.incoming] → ai-worker → [RabbitMQ: t
 
 ## Промпты
 
-`services/ai-worker/ai_client.py` — оба промпта правятся напрямую в коде:
-- `_SYSTEM_SALES` — инструкция продавцу (уточнить → предложить → выбрать → закрыть)
-- `_SYSTEM_JUDGE` — детектор согласия: "любую", "недорогую", "ок" — не согласие
+Промпты вынесены из кода в файлы и редактируются через веб-админку без перезапуска:
+
+- `data/prompts/sales_prompt.txt` — инструкция продавцу
+- `data/prompts/judge_prompt.txt` — детектор согласия
+
+`services/ai-worker/prompts.py` — загружает файлы с кэшированием по mtime (один `stat()` на вызов, нет I/O если файл не изменился). Если файл отсутствует — использует встроенный дефолт.
+
+Веб-админка: страница **Промпты** (`/prompts`) — два таба, изменения применяются без деплоя.
+
+## Профили клиентов
+
+`data/knowledge_base/users.txt` — не в git (личные данные), копировать вручную.
+
+Форматы идентификаторов (первая строка блока, блоки разделены пустой строкой):
+```
+@username
+Имя Отчество
+Факты через запятую или произвольно
+
+mobile: +79001234567
+Имя Отчество
+Факты
+
+id: 7593958387
+Имя Отчество
+Факты
+```
+
+Приоритет поиска в `user_profile.lookup()`: `id:` → `@username` → `mobile:`.
+
+Профиль передаётся в системный промпт GPT на **каждом** сообщении (не только при открытии диалога).
 
 ## ChromaDB
 
@@ -232,10 +260,20 @@ cd /var/develop/tg-sales-bot && docker compose down
 # 6. Следующий деплой (merge в main) автоматически применит k8s/
 ```
 
-**Загрузка базы знаний после миграции на k3s:**
+**Загрузка базы знаний (ChromaDB) на k3s:**
+
+`users.txt` не в git (личные данные) — копировать на сервер вручную:
 ```bash
-# data/ монтируется как hostPath — ingest запускается так же
-CHROMA_HOST=localhost python3 /var/develop/tg-sales-bot/scripts/ingest.py
+# С локальной машины
+"/c/Program Files/PuTTY/pscp" -pw '...' data/knowledge_base/users.txt claude@77.83.87.29:/var/develop/tg-sales-bot/data/knowledge_base/users.txt
+```
+
+Запустить ingest внутри ai-worker пода (там есть chromadb + openai):
+```bash
+# На сервере
+POD=$(KUBECONFIG=~/.kube/config kubectl get pod -n tg-sales-bot -l app=ai-worker -o jsonpath='{.items[0].metadata.name}')
+KUBECONFIG=~/.kube/config kubectl cp /tmp/ingest.py tg-sales-bot/$POD:/tmp/ingest.py
+KUBECONFIG=~/.kube/config kubectl exec -n tg-sales-bot $POD -- sh -c 'mkdir -p /app/scripts && cp /tmp/ingest.py /app/scripts/ && cd /app && python scripts/ingest.py'
 ```
 
 **Полезные команды kubectl:**
@@ -248,3 +286,21 @@ kubectl describe pod -n tg-sales-bot   # диагностика
 ```
 
 **Важно:** nginx остаётся единственным фронтом для всего сервера (antilopa-gnu.ru и другие домены). Traefik отключён при установке k3s. SSL-сертификаты управляются certbot на уровне nginx — не трогать.
+
+## imagePullPolicy — ВАЖНО, не менять
+
+Во всех k8s-манифестах стоит `imagePullPolicy: IfNotPresent`. **Не менять на `Always`.**
+
+Причина: `GITHUB_TOKEN`, который записывается в `ghcr-secret` при каждом деплое, живёт только во время выполнения Actions job. После завершения job токен истекает. Если под упадёт и k3s попытается перезапустить его с `Always`, он пойдёт в GHCR с просроченным токеном и получит 403 — под не поднимется совсем.
+
+Схема обновления образов (уже реализована в `deploy.yml`):
+1. `crictl pull --creds ...` — принудительно тянет свежий образ в containerd-кэш узла **пока токен ещё жив**
+2. `kubectl rollout restart` — пересоздаёт поды; `IfNotPresent` видит образ в кэше и использует его
+
+Итог: образы всегда актуальны после деплоя, а при аварийном рестарте под поднимается из кэша без обращения в реестр.
+
+## Сбор пользователей из мониторируемых групп
+
+listener логирует всех авторов сообщений из мониторируемых групп в Redis-хэш `seen_users` (один раз на пользователя, через `hsetnx`). Хранит: `user_id`, `username`, `first_name`, `last_name`, `chat_id`, `chat_title`, `first_seen`.
+
+Веб-админка: страница **Пользователи** (`/seen-users`) — таблица с поиском и экспортом CSV. Использовать для пополнения `users.txt`.
