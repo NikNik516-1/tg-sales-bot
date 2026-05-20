@@ -18,7 +18,7 @@ spec:
       containers:
       - name: listener
         image: ghcr.io/niknik516-1/tg-sales-bot/listener:latest
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         envFrom:
         - secretRef:
             name: bot-secret
