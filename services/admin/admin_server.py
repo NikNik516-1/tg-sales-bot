@@ -1,13 +1,25 @@
+import asyncio
 import json
 import os
+import urllib.parse
+from pathlib import Path
 from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import redis.asyncio as aioredis
-from config import REDIS_HOST, REDIS_PORT
+from config import REDIS_HOST, REDIS_PORT, CHROMA_HOST, CHROMA_PORT, OPENAI_API_KEY
 import chat_manager
 from state import get_all_active_users, get_history, get_state, clear_user, get_user_info
+
+DATA_DIR = Path(__file__).parent / "data" / "knowledge_base"
+
+_KNOWLEDGE_FILES = [
+    ("products",      "Каталог товаров",   "products.txt"),
+    ("sales_scripts", "Скрипты продаж",    "sales_scripts.txt"),
+    ("users",         "Профили клиентов",  "users.txt"),
+]
+_ALLOWED_FILENAMES = {fname for _, _, fname in _KNOWLEDGE_FILES}
 
 app = FastAPI(title="ПенШоп Админка")
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -157,3 +169,74 @@ async def unmonitor_channel(request: Request, channel_id: str = Form(...)):
         if linked_group_id:
             await chat_manager.remove(linked_group_id)
     return RedirectResponse(url=request.url_for("channels_page"), status_code=303)
+
+
+@app.get("/knowledge", response_class=HTMLResponse)
+async def knowledge_page(request: Request, status: str = "", tab: str = "", fragments: int = 0, error: str = ""):
+    files = []
+    for key, label, filename in _KNOWLEDGE_FILES:
+        try:
+            content = (DATA_DIR / filename).read_text(encoding="utf-8")
+        except FileNotFoundError:
+            content = ""
+        files.append({"key": key, "label": label, "filename": filename, "content": content})
+    valid_keys = {f["key"] for f in files}
+    active_tab = tab if tab in valid_keys else _KNOWLEDGE_FILES[0][0]
+    return templates.TemplateResponse(request, "knowledge.html", {
+        "files": files,
+        "status": status,
+        "active_tab": active_tab,
+        "fragments": fragments,
+        "error": error,
+    })
+
+
+@app.post("/knowledge/save")
+async def knowledge_save(
+    request: Request,
+    filename: str = Form(...),
+    content: str = Form(...),
+    tab: str = Form(default=""),
+):
+    if filename not in _ALLOWED_FILENAMES:
+        base = str(request.url_for("knowledge_page"))
+        return RedirectResponse(url=f"{base}?status=error&error=Недопустимое+имя+файла", status_code=303)
+    path = DATA_DIR / filename
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    base = str(request.url_for("knowledge_page"))
+    return RedirectResponse(url=f"{base}?status=saved&tab={tab}", status_code=303)
+
+
+@app.post("/knowledge/reindex")
+async def knowledge_reindex(request: Request, tab: str = Form(default="")):
+    try:
+        fragments = await asyncio.to_thread(_run_ingest)
+        base = str(request.url_for("knowledge_page"))
+        return RedirectResponse(url=f"{base}?status=reindexed&tab={tab}&fragments={fragments}", status_code=303)
+    except Exception as e:
+        base = str(request.url_for("knowledge_page"))
+        err = urllib.parse.quote(str(e)[:300])
+        return RedirectResponse(url=f"{base}?status=error&tab={tab}&error={err}", status_code=303)
+
+
+def _run_ingest() -> int:
+    import chromadb
+    from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
+
+    client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
+    ef = OpenAIEmbeddingFunction(api_key=OPENAI_API_KEY, model_name="text-embedding-3-small")
+    collection = client.get_or_create_collection("sales_knowledge", embedding_function=ef)
+
+    documents, ids = [], []
+    chunk_size = 600
+    for path in sorted(DATA_DIR.glob("*.txt")):
+        content = path.read_text(encoding="utf-8")
+        chunks = [content[i : i + chunk_size].strip() for i in range(0, len(content), chunk_size)]
+        for k, chunk in enumerate(chunks):
+            if chunk:
+                documents.append(chunk)
+                ids.append(f"{path.name}_{k}")
+    if documents:
+        collection.upsert(documents=documents, ids=ids)
+    return len(documents)
