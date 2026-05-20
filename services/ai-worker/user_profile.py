@@ -13,7 +13,7 @@ def _normalize_phone(phone: str) -> str:
 
 
 def _reload(file_path: Path, verbose: bool = False) -> None:
-    global _BY_USERNAME, _BY_PHONE, _last_mtime
+    global _BY_USERNAME, _BY_PHONE, _BY_ID, _last_mtime
     try:
         mtime = file_path.stat().st_mtime
     except FileNotFoundError:
