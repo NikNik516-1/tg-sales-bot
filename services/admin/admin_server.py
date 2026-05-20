@@ -13,6 +13,7 @@ import chat_manager
 from state import get_all_active_users, get_history, get_state, clear_user, get_user_info
 
 DATA_DIR = Path(__file__).parent / "data" / "knowledge_base"
+PROMPTS_DIR = Path(__file__).parent / "data" / "prompts"
 
 _KNOWLEDGE_FILES = [
     ("products",      "Каталог товаров",   "products.txt"),
@@ -20,6 +21,12 @@ _KNOWLEDGE_FILES = [
     ("users",         "Профили клиентов",  "users.txt"),
 ]
 _ALLOWED_FILENAMES = {fname for _, _, fname in _KNOWLEDGE_FILES}
+
+_PROMPT_FILES = [
+    ("sales", "Промпт продавца", "sales_prompt.txt"),
+    ("judge", "Промпт судьи",    "judge_prompt.txt"),
+]
+_ALLOWED_PROMPT_FILENAMES = {fname for _, _, fname in _PROMPT_FILES}
 
 app = FastAPI(title="ПенШоп Админка")
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -218,6 +225,41 @@ async def knowledge_reindex(request: Request, tab: str = Form(default="")):
         base = str(request.url_for("knowledge_page"))
         err = urllib.parse.quote(str(e)[:300])
         return RedirectResponse(url=f"{base}?status=error&tab={tab}&error={err}", status_code=303)
+
+
+@app.get("/prompts", response_class=HTMLResponse)
+async def prompts_page(request: Request, status: str = "", tab: str = ""):
+    files = []
+    for key, label, filename in _PROMPT_FILES:
+        try:
+            content = (PROMPTS_DIR / filename).read_text(encoding="utf-8")
+        except FileNotFoundError:
+            content = ""
+        files.append({"key": key, "label": label, "filename": filename, "content": content})
+    valid_keys = {f["key"] for f in files}
+    active_tab = tab if tab in valid_keys else _PROMPT_FILES[0][0]
+    return templates.TemplateResponse(request, "prompts.html", {
+        "files": files,
+        "status": status,
+        "active_tab": active_tab,
+    })
+
+
+@app.post("/prompts/save")
+async def prompts_save(
+    request: Request,
+    filename: str = Form(...),
+    content: str = Form(...),
+    tab: str = Form(default=""),
+):
+    if filename not in _ALLOWED_PROMPT_FILENAMES:
+        base = str(request.url_for("prompts_page"))
+        return RedirectResponse(url=f"{base}?status=error&tab={tab}", status_code=303)
+    path = PROMPTS_DIR / filename
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    base = str(request.url_for("prompts_page"))
+    return RedirectResponse(url=f"{base}?status=saved&tab={tab}", status_code=303)
 
 
 def _run_ingest() -> int:
