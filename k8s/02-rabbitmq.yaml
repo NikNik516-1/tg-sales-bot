@@ -25,12 +25,18 @@ spec:
         ports:
         - containerPort: 5672
         - containerPort: 15672
+        resources:
+          requests:
+            memory: "128Mi"
+          limits:
+            memory: "256Mi"
         livenessProbe:
           exec:
             command: ["rabbitmq-diagnostics", "ping"]
-          initialDelaySeconds: 30
-          periodSeconds: 10
-          failureThreshold: 12
+          initialDelaySeconds: 60
+          timeoutSeconds: 5
+          periodSeconds: 15
+          failureThreshold: 6
         volumeMounts:
         - name: data
           mountPath: /var/lib/rabbitmq
