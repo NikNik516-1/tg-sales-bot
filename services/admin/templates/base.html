@@ -46,6 +46,7 @@
   <a href="{{ request.url_for('groups_page') }}" {% if request.url.path.startswith('/groups') %}class="active"{% endif %}>Группы</a>
   <a href="{{ request.url_for('channels_page') }}" {% if request.url.path.startswith('/channels') %}class="active"{% endif %}>Каналы</a>
   <a href="{{ request.url_for('knowledge_page') }}" {% if request.url.path.startswith('/knowledge') %}class="active"{% endif %}>База знаний</a>
+  <a href="{{ request.url_for('prompts_page') }}" {% if request.url.path.startswith('/prompts') %}class="active"{% endif %}>Промпты</a>
 </nav>
 <div class="container">
   {% block content %}{% endblock %}
