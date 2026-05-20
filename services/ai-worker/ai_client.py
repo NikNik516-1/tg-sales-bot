@@ -16,11 +16,11 @@ async def generate_reply(
     user_profile: str = "",
 ) -> str:
     context_block = f"\n\nБаза знаний:\n{rag_context}" if rag_context else ""
-    messages = [{"role": "system", "content": prompts.get_sales() + context_block}]
+    profile_block = f"\n\nПрофиль клиента:\n{user_profile}" if user_profile else ""
+    messages = [{"role": "system", "content": prompts.get_sales() + context_block + profile_block}]
     messages.extend({"role": m["role"], "content": m["content"]} for m in history[-12:])
 
     if is_opening:
-        profile_block = f"\n\nПрофиль клиента:\n{user_profile}" if user_profile else ""
         if is_returning:
             content = (
                 f"Пользователь снова написал в группе: «{user_message}».{profile_block}\n"
