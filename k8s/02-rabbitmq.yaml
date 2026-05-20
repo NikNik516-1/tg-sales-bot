@@ -22,8 +22,6 @@ spec:
           value: guest
         - name: RABBITMQ_DEFAULT_PASS
           value: guest
-        - name: RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS
-          value: "-rabbit vm_memory_high_watermark {absolute,134217728}"
         ports:
         - containerPort: 5672
         - containerPort: 15672
@@ -37,7 +35,7 @@ spec:
         livenessProbe:
           tcpSocket:
             port: 5672
-          initialDelaySeconds: 30
+          initialDelaySeconds: 60
           periodSeconds: 10
           failureThreshold: 6
         volumeMounts:
