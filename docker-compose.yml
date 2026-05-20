@@ -90,9 +90,13 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      chromadb:
+        condition: service_healthy
     env_file: .env
     ports:
       - "127.0.0.1:8082:8080"
+    volumes:
+      - ./data:/app/data
     networks:
       - bot_net
     restart: unless-stopped
