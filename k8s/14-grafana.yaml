@@ -245,11 +245,11 @@ spec:
           mountPath: /var/lib/grafana
         resources:
           requests:
-            memory: "128Mi"
-            cpu: "50m"
+            memory: "64Mi"
+            cpu: "20m"
           limits:
-            memory: "256Mi"
-            cpu: "200m"
+            memory: "128Mi"
+            cpu: "100m"
       volumes:
       - name: datasource
         configMap:

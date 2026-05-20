@@ -24,10 +24,10 @@ spec:
             name: bot-secret
         resources:
           requests:
-            memory: "128Mi"
-            cpu: "50m"
+            memory: "32Mi"
+            cpu: "20m"
           limits:
-            memory: "256Mi"
-            cpu: "200m"
+            memory: "96Mi"
+            cpu: "100m"
       imagePullSecrets:
       - name: ghcr-secret
