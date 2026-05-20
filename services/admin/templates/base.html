@@ -45,6 +45,7 @@
   <a href="{{ request.url_for('dashboard') }}" {% if request.url.path == '/' %}class="active"{% endif %}>Диалоги</a>
   <a href="{{ request.url_for('groups_page') }}" {% if request.url.path.startswith('/groups') %}class="active"{% endif %}>Группы</a>
   <a href="{{ request.url_for('channels_page') }}" {% if request.url.path.startswith('/channels') %}class="active"{% endif %}>Каналы</a>
+  <a href="{{ request.url_for('seen_users_page') }}" {% if request.url.path.startswith('/seen-users') %}class="active"{% endif %}>Пользователи</a>
   <a href="{{ request.url_for('knowledge_page') }}" {% if request.url.path.startswith('/knowledge') %}class="active"{% endif %}>База знаний</a>
   <a href="{{ request.url_for('prompts_page') }}" {% if request.url.path.startswith('/prompts') %}class="active"{% endif %}>Промпты</a>
 </nav>

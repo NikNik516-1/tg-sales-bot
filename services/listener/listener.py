@@ -80,6 +80,27 @@ async def _log_seen_chat(message: Message) -> None:
     await r.aclose()
 
 
+async def _log_seen_user(message: Message) -> None:
+    if not message.from_user:
+        return
+    user_id = str(message.from_user.id)
+    r = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+    try:
+        if await r.hexists("seen_users", user_id):
+            return
+        info = json.dumps({
+            "username": message.from_user.username or "",
+            "first_name": message.from_user.first_name or "",
+            "last_name": message.from_user.last_name or "",
+            "chat_id": str(message.chat.id),
+            "chat_title": message.chat.title or "",
+            "first_seen": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+        }, ensure_ascii=False)
+        await r.hsetnx("seen_users", user_id, info)
+    finally:
+        await r.aclose()
+
+
 def _in_monitored_chat(_, __, message: Message) -> bool:
     chats = chat_manager.get()
     if not chats:
@@ -191,6 +212,10 @@ def register(app: Client):
             "is_returning": False,
             "from_user": _from_user_info(message.from_user),
         })
+
+    @app.on_message(monitored_chat & ~filters.me, group=1)
+    async def on_monitored_user(client: Client, message: Message):
+        asyncio.create_task(_log_seen_user(message))
 
     @app.on_message(filters.group & ~filters.me, group=1)
     async def on_any_group(client: Client, message: Message):
