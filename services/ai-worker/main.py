@@ -38,12 +38,11 @@ async def process_message(payload: dict) -> None:
                 log.info("сделка закрыта", user_id=user_id)
                 return
 
-        profile = ""
-        if is_opening:
-            profile = user_profile.lookup(
-                username=from_user.get("username", ""),
-                phone=from_user.get("phone", ""),
-            )
+        profile = user_profile.lookup(
+            username=from_user.get("username", ""),
+            phone=from_user.get("phone", ""),
+            user_id=user_id,
+        )
 
         rag_docs = rag.search(text)
         rag_context = "\n---\n".join(rag_docs)
