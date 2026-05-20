@@ -35,7 +35,7 @@ spec:
         livenessProbe:
           tcpSocket:
             port: 5672
-          initialDelaySeconds: 60
+          initialDelaySeconds: 90
           periodSeconds: 10
           failureThreshold: 6
         volumeMounts:
