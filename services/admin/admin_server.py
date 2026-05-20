@@ -335,6 +335,8 @@ def _run_ingest() -> int:
     documents, ids = [], []
     chunk_size = 600
     for path in sorted(DATA_DIR.glob("*.txt")):
+        if path.name == "users.txt":
+            continue
         content = path.read_text(encoding="utf-8")
         chunks = [content[i : i + chunk_size].strip() for i in range(0, len(content), chunk_size)]
         for k, chunk in enumerate(chunks):
