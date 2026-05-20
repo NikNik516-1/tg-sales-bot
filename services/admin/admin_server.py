@@ -262,6 +262,68 @@ async def prompts_save(
     return RedirectResponse(url=f"{base}?status=saved&tab={tab}", status_code=303)
 
 
+@app.get("/seen-users", response_class=HTMLResponse)
+async def seen_users_page(request: Request, q: str = ""):
+    r = _redis()
+    raw = await r.hgetall("seen_users")
+    await r.aclose()
+    all_users = []
+    for user_id, data in raw.items():
+        try:
+            info = json.loads(data)
+        except Exception:
+            continue
+        all_users.append({"user_id": user_id, **info})
+    if q:
+        q_lower = q.lower()
+        filtered = [
+            u for u in all_users
+            if q_lower in u.get("username", "").lower()
+            or q_lower in u.get("first_name", "").lower()
+            or q_lower in u.get("last_name", "").lower()
+            or q_lower in u["user_id"]
+        ]
+    else:
+        filtered = all_users
+    filtered.sort(key=lambda u: u.get("first_seen", ""), reverse=True)
+    return templates.TemplateResponse(request, "seen_users.html", {
+        "users": filtered, "q": q, "total": len(all_users),
+    })
+
+
+@app.get("/seen-users/export")
+async def seen_users_export():
+    import csv
+    import io
+    from fastapi.responses import StreamingResponse
+    r = _redis()
+    raw = await r.hgetall("seen_users")
+    await r.aclose()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["user_id", "username", "first_name", "last_name", "chat_id", "chat_title", "first_seen"])
+    for user_id in sorted(raw.keys()):
+        try:
+            info = json.loads(raw[user_id])
+        except Exception:
+            continue
+        writer.writerow([
+            user_id,
+            info.get("username", ""),
+            info.get("first_name", ""),
+            info.get("last_name", ""),
+            info.get("chat_id", ""),
+            info.get("chat_title", ""),
+            info.get("first_seen", ""),
+        ])
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue().encode("utf-8-sig")]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=seen_users.csv"},
+    )
+
+
 def _run_ingest() -> int:
     import chromadb
     from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction

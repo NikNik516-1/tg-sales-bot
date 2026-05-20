@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Пользователи из мониторируемых групп</h1>
+
+<div class="card">
+  <div class="row" style="margin-bottom:18px;">
+    <form method="get" action="{{ request.url_for('seen_users_page') }}" style="display:flex; gap:8px; align-items:center;">
+      <input type="text" name="q" value="{{ q }}" placeholder="Поиск по имени, нику, ID…">
+      <button type="submit" class="btn btn-primary">Найти</button>
+      {% if q %}
+      <a href="{{ request.url_for('seen_users_page') }}" class="btn btn-gray">Сбросить</a>
+      {% endif %}
+    </form>
+    <a href="{{ request.url_for('seen_users_export') }}" class="btn btn-success" style="margin-left:auto;">Скачать CSV</a>
+  </div>
+
+  <div style="font-size:13px; color:#94a3b8; margin-bottom:12px;">
+    Показано: {{ users|length }}{% if q %} из {{ total }}{% endif %} пользователей
+  </div>
+
+  {% if users %}
+  <table>
+    <thead>
+      <tr>
+        <th>User ID</th>
+        <th>Username</th>
+        <th>Имя</th>
+        <th>Фамилия</th>
+        <th>Группа</th>
+        <th>Впервые замечен</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td><code>{{ u.user_id }}</code></td>
+        <td>{% if u.username %}<a href="https://t.me/{{ u.username }}" target="_blank">@{{ u.username }}</a>{% else %}—{% endif %}</td>
+        <td>{{ u.first_name or '—' }}</td>
+        <td>{{ u.last_name or '—' }}</td>
+        <td style="font-size:13px; color:#64748b;">{{ u.chat_title or u.chat_id }}</td>
+        <td style="font-size:13px; color:#64748b;">{{ u.first_seen }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty">
+    {% if q %}Ничего не найдено по запросу «{{ q }}»{% else %}Пользователей пока нет — они появятся, когда кто-то напишет в мониторируемой группе{% endif %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
