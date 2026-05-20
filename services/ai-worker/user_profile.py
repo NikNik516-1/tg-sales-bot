@@ -2,6 +2,7 @@ from pathlib import Path
 
 _BY_USERNAME: dict[str, str] = {}
 _BY_PHONE: dict[str, str] = {}
+_BY_ID: dict[str, str] = {}
 _last_mtime: float = 0.0
 
 _DEFAULT_PATH = Path(__file__).parent / "data" / "knowledge_base" / "users.txt"
@@ -23,6 +24,7 @@ def _reload(file_path: Path, verbose: bool = False) -> None:
         return
     by_username: dict[str, str] = {}
     by_phone: dict[str, str] = {}
+    by_id: dict[str, str] = {}
     try:
         text = file_path.read_text(encoding="utf-8")
     except FileNotFoundError:
@@ -38,17 +40,25 @@ def _reload(file_path: Path, verbose: bool = False) -> None:
             phone = _normalize_phone(identifier.split(":", 1)[1])
             if phone:
                 by_phone[phone] = profile
-    _BY_USERNAME, _BY_PHONE, _last_mtime = by_username, by_phone, mtime
+        elif identifier.lower().startswith("id:"):
+            uid = identifier.split(":", 1)[1].strip()
+            if uid.isdigit():
+                by_id[uid] = profile
+    _BY_USERNAME, _BY_PHONE, _BY_ID, _last_mtime = by_username, by_phone, by_id, mtime
     if verbose:
-        print(f"[user_profile] загружено: {len(_BY_USERNAME)} username, {len(_BY_PHONE)} phone")
+        print(f"[user_profile] загружено: {len(_BY_USERNAME)} username, {len(_BY_PHONE)} phone, {len(_BY_ID)} id")
 
 
 def load(path: str | None = None) -> None:
     _reload(Path(path) if path else _DEFAULT_PATH, verbose=True)
 
 
-def lookup(username: str = "", phone: str = "") -> str:
+def lookup(username: str = "", phone: str = "", user_id: int = 0) -> str:
     _reload(_DEFAULT_PATH)
+    if user_id:
+        found = _BY_ID.get(str(user_id), "")
+        if found:
+            return found
     if username:
         found = _BY_USERNAME.get(username.lower().lstrip("@"), "")
         if found:
