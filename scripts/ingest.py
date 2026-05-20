@@ -27,7 +27,7 @@ documents, ids = [], []
 chunk_size = 600
 
 for filename in sorted(os.listdir(DATA_DIR)):
-    if not filename.endswith(".txt"):
+    if not filename.endswith(".txt") or filename == "users.txt":
         continue
     path = os.path.join(DATA_DIR, filename)
     with open(path, encoding="utf-8") as f:
