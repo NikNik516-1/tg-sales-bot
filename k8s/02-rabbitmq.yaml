@@ -27,9 +27,11 @@ spec:
         - containerPort: 15672
         resources:
           requests:
-            memory: "128Mi"
+            memory: "64Mi"
+            cpu: "20m"
           limits:
-            memory: "256Mi"
+            memory: "192Mi"
+            cpu: "100m"
         livenessProbe:
           exec:
             command: ["rabbitmq-diagnostics", "ping"]

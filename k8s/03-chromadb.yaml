@@ -22,6 +22,13 @@ spec:
           value: "False"
         ports:
         - containerPort: 8000
+        resources:
+          requests:
+            memory: "24Mi"
+            cpu: "10m"
+          limits:
+            memory: "96Mi"
+            cpu: "100m"
         livenessProbe:
           tcpSocket:
             port: 8000
