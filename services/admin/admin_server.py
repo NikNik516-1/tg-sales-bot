@@ -282,6 +282,7 @@ async def seen_users_page(request: Request, q: str = ""):
             or q_lower in u.get("first_name", "").lower()
             or q_lower in u.get("last_name", "").lower()
             or q_lower in u["user_id"]
+            or q_lower in u.get("phone", "").lower()
         ]
     else:
         filtered = all_users
@@ -301,7 +302,7 @@ async def seen_users_export():
     await r.aclose()
     output = io.StringIO()
     writer = csv.writer(output)
-    writer.writerow(["user_id", "username", "first_name", "last_name", "chat_id", "chat_title", "first_seen"])
+    writer.writerow(["user_id", "username", "first_name", "last_name", "phone", "chat_id", "chat_title", "first_seen"])
     for user_id in sorted(raw.keys()):
         try:
             info = json.loads(raw[user_id])
@@ -312,6 +313,7 @@ async def seen_users_export():
             info.get("username", ""),
             info.get("first_name", ""),
             info.get("last_name", ""),
+            info.get("phone", ""),
             info.get("chat_id", ""),
             info.get("chat_title", ""),
             info.get("first_seen", ""),
