@@ -26,6 +26,7 @@
         <th>Username</th>
         <th>Имя</th>
         <th>Фамилия</th>
+        <th>Телефон</th>
         <th>Группа</th>
         <th>Впервые замечен</th>
       </tr>
@@ -37,6 +38,7 @@
         <td>{% if u.username %}<a href="https://t.me/{{ u.username }}" target="_blank">@{{ u.username }}</a>{% else %}—{% endif %}</td>
         <td>{{ u.first_name or '—' }}</td>
         <td>{{ u.last_name or '—' }}</td>
+        <td style="font-size:13px;">{{ u.phone or '—' }}</td>
         <td style="font-size:13px; color:#64748b;">{{ u.chat_title or u.chat_id }}</td>
         <td style="font-size:13px; color:#64748b;">{{ u.first_seen }}</td>
       </tr>

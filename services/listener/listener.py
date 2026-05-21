@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import structlog
 import redis.asyncio as aioredis
 from pyrogram import Client, filters
-from pyrogram.enums import ChatType
+from pyrogram.enums import ChatType, ParseMode
 from pyrogram.types import Message
 from pyrogram.errors import UserIsBlocked, InputUserDeactivated, PeerIdInvalid
 
@@ -24,9 +24,9 @@ def set_mq_connection(conn) -> None:
     _mq_connection = conn
 
 
-async def _send_safe(client: Client, user_id: int, text: str) -> bool:
+async def _send_safe(client: Client, user_id: int, text: str, parse_mode=None) -> bool:
     try:
-        await client.send_message(user_id, text)
+        await client.send_message(user_id, text, parse_mode=parse_mode)
         return True
     except (UserIsBlocked, InputUserDeactivated, PeerIdInvalid) as e:
         log.warning("не удалось отправить DM", user_id=user_id, error=str(e))
@@ -92,6 +92,7 @@ async def _log_seen_user(message: Message) -> None:
             "username": message.from_user.username or "",
             "first_name": message.from_user.first_name or "",
             "last_name": message.from_user.last_name or "",
+            "phone": message.from_user.phone_number or "",
             "chat_id": str(message.chat.id),
             "chat_title": message.chat.title or "",
             "first_seen": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
@@ -129,7 +130,9 @@ async def handle_outgoing(client: Client, payload: dict) -> None:
     text = payload.get("text", "")
 
     if payload.get("notify_admin"):
-        await _send_safe(client, ADMIN_TG_ID, payload.get("admin_text", ""))
+        _PM_MAP = {"html": ParseMode.HTML, "markdown": ParseMode.MARKDOWN}
+        admin_pm = _PM_MAP.get(payload.get("admin_parse_mode", ""))
+        await _send_safe(client, ADMIN_TG_ID, payload.get("admin_text", ""), parse_mode=admin_pm)
 
     if text:
         await _send_safe(client, user_id, text)
@@ -199,19 +202,42 @@ def register(app: Client):
 
     @app.on_message(filters.private & ~filters.me)
     async def on_private(client: Client, message: Message):
-        if not message.text:
+        if not message.text or not message.from_user:
             return
         user_id = message.from_user.id
         state = await get_state(user_id)
-        if state != "pitching":
-            return
-        await publish(_mq_connection, QUEUE_INCOMING, {
-            "user_id": user_id,
-            "text": message.text,
-            "is_opening": False,
-            "is_returning": False,
-            "from_user": _from_user_info(message.from_user),
-        })
+
+        if state == "pitching":
+            await publish(_mq_connection, QUEUE_INCOMING, {
+                "user_id": user_id,
+                "text": message.text,
+                "is_opening": False,
+                "is_returning": False,
+                "from_user": _from_user_info(message.from_user),
+            })
+        elif state == "agreed":
+            log.info("клиент вернулся в личку", user_id=user_id)
+            await clear_user(user_id)
+            await set_state(user_id, "pitching")
+            await publish(_mq_connection, QUEUE_INCOMING, {
+                "user_id": user_id,
+                "text": message.text,
+                "is_opening": True,
+                "is_returning": True,
+                "is_direct_dm": True,
+                "from_user": _from_user_info(message.from_user),
+            })
+        elif not state:
+            log.info("новый диалог из лички", user_id=user_id)
+            await set_state(user_id, "pitching")
+            await publish(_mq_connection, QUEUE_INCOMING, {
+                "user_id": user_id,
+                "text": message.text,
+                "is_opening": True,
+                "is_returning": False,
+                "is_direct_dm": True,
+                "from_user": _from_user_info(message.from_user),
+            })
 
     @app.on_message(monitored_chat & ~filters.me, group=1)
     async def on_monitored_user(client: Client, message: Message):
