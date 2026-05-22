@@ -227,6 +227,11 @@ kubectl rollout restart deployment/listener deployment/ai-worker deployment/admi
 
 Provisioning Grafana: datasource и dashboard — через ConfigMap (k8s) или volume-mount (docker-compose). Изменения в UI не сохраняются — редактировать `k8s/14-grafana.yaml` → ConfigMap `grafana-dashboard`.
 
+## Лендинг
+
+Проект посадочной страницы находится в `C:\Delete\cl_tg-sales-landing\` (отдельный репозиторий).
+Концепция и текстовый контент лендинга — `LANDING.md` в этом репозитории.
+
 ## SSH-реквизиты
 
 Пароль, plink-команды и параметры сервера — в `C:\delete\claudedevops\CLAUDE.md`.
