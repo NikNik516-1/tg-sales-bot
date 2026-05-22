@@ -11,15 +11,12 @@ def get_redis() -> aioredis.Redis:
         _redis = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
     return _redis
 
-STATE_TTL = 86400  # 24 часа
-
-
 async def get_state(user_id: int) -> str | None:
     return await get_redis().get(f"state:{user_id}")
 
 
 async def set_state(user_id: int, state: str) -> None:
-    await get_redis().setex(f"state:{user_id}", STATE_TTL, state)
+    await get_redis().set(f"state:{user_id}", state)
 
 
 async def get_history(user_id: int) -> list[dict]:
@@ -34,7 +31,7 @@ async def append_history(user_id: int, role: str, content: str) -> None:
         "content": content,
         "ts": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     })
-    await get_redis().setex(f"history:{user_id}", STATE_TTL, json.dumps(history, ensure_ascii=False))
+    await get_redis().set(f"history:{user_id}", json.dumps(history, ensure_ascii=False))
 
 
 USER_INFO_TTL = 86400 * 30  # 30 дней
