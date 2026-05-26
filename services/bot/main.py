@@ -1,7 +1,7 @@
 import asyncio
 from logger import setup
 from pyrogram import Client
-from config import TG_API_ID, TG_API_HASH, TG_SESSION_STRING
+from config import TG_API_ID, TG_API_HASH, TG_SESSION_STRING, TG_PROXY_HOST, TG_PROXY_PORT
 import chat_manager
 import listener
 import rag
@@ -28,11 +28,13 @@ async def main():
     await chat_manager.load()
 
     log.info("подключение к Telegram")
+    proxy = {"scheme": "socks5", "hostname": TG_PROXY_HOST, "port": TG_PROXY_PORT} if TG_PROXY_HOST else None
     tg_app = Client(
         "seller",
         api_id=TG_API_ID,
         api_hash=TG_API_HASH,
         session_string=TG_SESSION_STRING,
+        proxy=proxy,
     )
     listener.register(tg_app)
 
