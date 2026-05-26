@@ -10,16 +10,14 @@ Telegram sales bot: слушает сообщения в заданных гру
 
 ```
 services/
-  listener/     — Pyrogram singleton: читает Telegram, публикует события в RabbitMQ
-  ai-worker/    — потребляет очередь, вызывает GPT+RAG, публикует ответы
+  bot/          — основной сервис: Pyrogram + GPT + RAG (listener + ai-worker в одном процессе)
   admin/        — FastAPI веб-админка (порт 8082 на хосте) + static/favicon.png
-shared/         — общий код: config.py, state.py, mq.py (копируется в каждый образ)
+shared/         — общий код: config.py, state.py, logger.py (копируется в каждый образ)
 app/            — монолитная версия (сохранена для истории, не используется)
 data/knowledge_base/  — txt-файлы для RAG
 data/images/    — иконки и изображения (favicon и т.п.)
 scripts/        — generate_session.py, ingest.py
 tests/          — pytest: test_keywords.py, test_timestamp.py, test_chat_manager.py
-k8s/            — Kubernetes манифесты (Фаза 6)
 .github/workflows/    — ci.yml (lint+test+build), deploy.yml (push GHCR + SSH деплой)
 ```
 
@@ -30,17 +28,17 @@ k8s/            — Kubernetes манифесты (Фаза 6)
 docker-compose up -d --build
 
 # Пересобрать один сервис
-docker-compose build listener && docker-compose up -d listener
+docker-compose build bot && docker-compose up -d bot
 
 # Логи сервиса в реальном времени
-docker compose logs listener -f
-docker compose logs ai-worker -f
+docker compose logs bot -f
+docker compose logs admin -f
 
 # Сбросить состояние пользователя в Redis
-docker exec clrosreestr-redis-1 redis-cli DEL "state:USER_ID" "history:USER_ID"
+docker exec cl_tg-sales-bot-redis-1 redis-cli DEL "state:USER_ID" "history:USER_ID"
 ```
 
-Порты (все привязаны к localhost): `8082` — веб-админка, `15672` — RabbitMQ Management UI (guest/guest), `8000` — ChromaDB, `9090` — Prometheus, `3001` — Grafana.
+Порты (все привязаны к localhost): `8082` — веб-админка, `8000` — ChromaDB.
 
 ## Загрузка базы знаний в ChromaDB
 
@@ -69,26 +67,28 @@ python scripts/generate_session.py
 | `MONITORED_CHATS` | ID чатов через запятую. Если пусто — debug-режим |
 | `KEYWORDS` | Ключевые фразы через запятую, поиск по вхождению (регистронезависимо) |
 | `ADMIN_TG_ID` | TG user_id администратора |
-| `RABBITMQ_URL` | По умолчанию `amqp://guest:guest@rabbitmq/` |
 | `ROOT_PATH` | Prefix для FastAPI (на VPS: `/tg-sales-bot/adminka`; локально — пусто) |
 
-## Архитектура микросервисов
+## Архитектура
 
 **Поток сообщения:**
 ```
-Telegram → listener → [RabbitMQ: tg.incoming] → ai-worker → [RabbitMQ: tg.outgoing] → listener → Telegram DM
+Telegram → bot (listener.py) → ai_handler.process_message() → bot (handle_outgoing) → Telegram DM
 ```
 
-**Очереди RabbitMQ (durable):**
-- `tg.incoming` — событие из Telegram: `{user_id, text, is_opening, from_user}`
-- `tg.outgoing` — ответ для отправки: `{user_id, text, notify_admin, admin_text}`
+**bot — единый сервис (`services/bot/`):**
+- `listener.py` — Pyrogram-обработчики, при триггере запускает `asyncio.create_task(_process_and_send(...))`
+- `ai_handler.py` — вызывает GPT+RAG, возвращает dict с ответом
+- `ai_client.py` — OpenAI API
+- `rag.py` — ChromaDB поиск
+- `prompts.py` — загрузка промптов с кэшем по mtime
+- `user_profile.py` — профили клиентов из users.txt
+- `chat_manager.py` — список мониторируемых чатов из Redis
 
 **shared/ — общий код для всех сервисов:**
-- `config.py` — все переменные из .env, включая `RABBITMQ_URL`
-- `state.py` — Redis: `state:{id}`, `history:{id}` (TTL 24ч), `user_info:{id}` (TTL 30д)
-- `mq.py` — `get_connection()`, `publish()`, `consume()` на aio-pika
-
-**listener важно:** singleton, нельзя масштабировать — одна Pyrogram-сессия на процесс. `ai-worker` можно запускать в нескольких репликах.
+- `config.py` — все переменные из .env
+- `state.py` — Redis: `state:{id}`, `history:{id}`, `user_info:{id}` (TTL 30д)
+- `logger.py` — structlog конфигурация
 
 **Pyrogram важно:** обработчики в одной группе (group=0) взаимно исключают друг друга. `group=1` — параллельные обработчики для логирования.
 
@@ -99,7 +99,7 @@ Telegram → listener → [RabbitMQ: tg.incoming] → ai-worker → [RabbitMQ: t
 - `data/prompts/sales_prompt.txt` — инструкция продавцу
 - `data/prompts/judge_prompt.txt` — детектор согласия
 
-`services/ai-worker/prompts.py` — загружает файлы с кэшированием по mtime (один `stat()` на вызов, нет I/O если файл не изменился). Если файл отсутствует — использует встроенный дефолт.
+`services/bot/prompts.py` — загружает файлы с кэшированием по mtime (один `stat()` на вызов, нет I/O если файл не изменился). Если файл отсутствует — использует встроенный дефолт.
 
 Веб-админка: страница **Промпты** (`/prompts`) — два таба, изменения применяются без деплоя.
 
@@ -161,14 +161,14 @@ gh pr create --title "..." --body "..." && gh pr merge --merge
 
 **Смержить** = слить ветку `dev` в `main`. После этого GitHub Actions автоматически собирает образы и деплоит на VPS.
 
-## CI/CD (Фаза 5)
+## CI/CD
 
 **Обычный цикл разработки:**
 ```
 git commit + git push origin dev
   → gh pr create --title "..." --body "..."
   → gh pr merge <номер> --merge
-  → CI+deploy: ruff · pytest · docker build · push GHCR · SSH на VPS → kubectl apply
+  → CI+deploy: ruff · pytest · docker build · push GHCR · SSH на VPS → docker compose up
 ```
 
 **GitHub Actions:**
@@ -177,8 +177,7 @@ git commit + git push origin dev
 
 **GHCR образы:**
 ```
-ghcr.io/niknik516-1/tg-sales-bot/listener:latest
-ghcr.io/niknik516-1/tg-sales-bot/ai-worker:latest
+ghcr.io/niknik516-1/tg-sales-bot/bot:latest
 ghcr.io/niknik516-1/tg-sales-bot/admin:latest
 ```
 
@@ -196,36 +195,25 @@ pytest -v
 
 **Сервер:** `77.83.87.29` (claude@), директория `/var/develop/tg-sales-bot/`
 
-**Текущий прод работает на k3s** (bootstrap выполнен). Docker-compose на VPS остановлен.
-
 **Обновление — через CI/CD (автоматически):**
-Смержить PR в `main` → GitHub Actions задеплоит сам (`kubectl apply -k k8s/ && rollout restart`).
+Смержить PR в `main` → GitHub Actions задеплоит сам.
 
-**Обновление — вручную (если CI/CD недоступен):**
+**Обновление — вручную:**
 ```bash
 cd /var/develop/tg-sales-bot
 git pull origin main
-kubectl apply -k k8s/
-kubectl rollout restart deployment/listener deployment/ai-worker deployment/admin -n tg-sales-bot
+docker compose pull
+docker compose up -d
 ```
-
-**Bootstrap нового сервера с нуля** (редкий случай — см. k8s-раздел ниже + `secret.template.yaml`).
 
 **Nginx:** добавлен location в `/etc/nginx/sites-enabled/antilopa-gnu-ru.conf`:
 - `https://antilopa-gnu.ru/tg-sales-bot/adminka/` → `http://127.0.0.1:8082/`
-- `https://antilopa-gnu.ru/tg-sales-bot/prometheus/` → `http://127.0.0.1:9090/tg-sales-bot/prometheus/`
-- `https://antilopa-gnu.ru/tg-sales-bot/grafana/` → `http://127.0.0.1:3001/tg-sales-bot/grafana/`
 
-## Мониторинг (Фаза 7)
+## Сбор пользователей из мониторируемых групп
 
-**Prometheus:** `https://antilopa-gnu.ru/tg-sales-bot/prometheus/` (без авторизации)
-**Grafana:** `https://antilopa-gnu.ru/tg-sales-bot/grafana/` (анонимный просмотр; логин admin/admin)
+bot логирует всех авторов сообщений из мониторируемых групп в Redis-хэш `seen_users` (один раз на пользователя, через `hsetnx`). Хранит: `user_id`, `username`, `first_name`, `last_name`, `chat_id`, `chat_title`, `first_seen`.
 
-Локально (docker-compose): Prometheus — `http://localhost:9090`, Grafana — `http://localhost:3001`.
-
-Метрики приложения: `gpt_response_seconds` (histogram, label `call`), `rabbitmq_queue_messages` (gauge, label `queue`), `ai_worker_messages_processed_total`, `ai_worker_messages_errors_total`.
-
-Provisioning Grafana: datasource и dashboard — через ConfigMap (k8s) или volume-mount (docker-compose). Изменения в UI не сохраняются — редактировать `k8s/14-grafana.yaml` → ConfigMap `grafana-dashboard`.
+Веб-админка: страница **Пользователи** (`/seen-users`) — таблица с поиском и экспортом CSV. Использовать для пополнения `users.txt`.
 
 ## Лендинг
 
@@ -236,76 +224,3 @@ Provisioning Grafana: datasource и dashboard — через ConfigMap (k8s) и�
 
 Пароль, plink-команды и параметры сервера — в `C:\delete\claudedevops\CLAUDE.md`.
 Не хранить credentials в этом репозитории.
-
-## Kubernetes (k3s) — Фаза 6
-
-Манифесты в `k8s/`. Deploy workflow автоматически переключается на k3s если namespace `tg-sales-bot` существует, иначе падает в docker-compose fallback.
-
-**Bootstrap k3s на VPS (один раз, вручную):**
-```bash
-# 1. Установить k3s (Traefik отключён — nginx остаётся фронтом)
-curl -sfL https://get.k3s.io | sh -s - --disable=traefik
-
-# 2. Настроить kubectl для пользователя claude
-mkdir -p ~/.kube
-sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
-sudo chown claude:claude ~/.kube/config
-
-# 3. Создать namespace
-kubectl apply -f /var/develop/tg-sales-bot/k8s/00-namespace.yaml
-
-# 4. Создать Secret из значений .env (один раз, не в git!)
-cp /var/develop/tg-sales-bot/k8s/secret.template.yaml /var/develop/tg-sales-bot/k8s/secret.yaml
-# Заполнить значения в secret.yaml из /var/develop/tg-sales-bot/.env
-kubectl apply -f /var/develop/tg-sales-bot/k8s/secret.yaml
-
-# 5. Остановить docker-compose (k3s берёт порт 8082 через hostPort)
-cd /var/develop/tg-sales-bot && docker compose down
-
-# 6. Следующий деплой (merge в main) автоматически применит k8s/
-```
-
-**Загрузка базы знаний (ChromaDB) на k3s:**
-
-`users.txt` не в git (личные данные) — копировать на сервер вручную:
-```bash
-# С локальной машины
-"/c/Program Files/PuTTY/pscp" -pw '...' data/knowledge_base/users.txt claude@77.83.87.29:/var/develop/tg-sales-bot/data/knowledge_base/users.txt
-```
-
-Запустить ingest внутри ai-worker пода (там есть chromadb + openai):
-```bash
-# На сервере
-POD=$(KUBECONFIG=~/.kube/config kubectl get pod -n tg-sales-bot -l app=ai-worker -o jsonpath='{.items[0].metadata.name}')
-KUBECONFIG=~/.kube/config kubectl cp /tmp/ingest.py tg-sales-bot/$POD:/tmp/ingest.py
-KUBECONFIG=~/.kube/config kubectl exec -n tg-sales-bot $POD -- sh -c 'mkdir -p /app/scripts && cp /tmp/ingest.py /app/scripts/ && cd /app && python scripts/ingest.py'
-```
-
-**Полезные команды kubectl:**
-```bash
-kubectl get pods -n tg-sales-bot
-kubectl logs -f deployment/ai-worker -n tg-sales-bot
-kubectl rollout restart deployment/ai-worker -n tg-sales-bot
-kubectl get hpa -n tg-sales-bot       # HorizontalPodAutoscaler для ai-worker
-kubectl describe pod -n tg-sales-bot   # диагностика
-```
-
-**Важно:** nginx остаётся единственным фронтом для всего сервера (antilopa-gnu.ru и другие домены). Traefik отключён при установке k3s. SSL-сертификаты управляются certbot на уровне nginx — не трогать.
-
-## imagePullPolicy — ВАЖНО, не менять
-
-Во всех k8s-манифестах стоит `imagePullPolicy: IfNotPresent`. **Не менять на `Always`.**
-
-Причина: `GITHUB_TOKEN`, который записывается в `ghcr-secret` при каждом деплое, живёт только во время выполнения Actions job. После завершения job токен истекает. Если под упадёт и k3s попытается перезапустить его с `Always`, он пойдёт в GHCR с просроченным токеном и получит 403 — под не поднимется совсем.
-
-Схема обновления образов (уже реализована в `deploy.yml`):
-1. `crictl pull --creds ...` — принудительно тянет свежий образ в containerd-кэш узла **пока токен ещё жив**
-2. `kubectl rollout restart` — пересоздаёт поды; `IfNotPresent` видит образ в кэше и использует его
-
-Итог: образы всегда актуальны после деплоя, а при аварийном рестарте под поднимается из кэша без обращения в реестр.
-
-## Сбор пользователей из мониторируемых групп
-
-listener логирует всех авторов сообщений из мониторируемых групп в Redis-хэш `seen_users` (один раз на пользователя, через `hsetnx`). Хранит: `user_id`, `username`, `first_name`, `last_name`, `chat_id`, `chat_title`, `first_seen`.
-
-Веб-админка: страница **Пользователи** (`/seen-users`) — таблица с поиском и экспортом CSV. Использовать для пополнения `users.txt`.

@@ -1,3 +1,0 @@
-aio-pika
-redis[asyncio]
-python-dotenv

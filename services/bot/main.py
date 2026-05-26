@@ -4,9 +4,10 @@ from pyrogram import Client
 from config import TG_API_ID, TG_API_HASH, TG_SESSION_STRING
 import chat_manager
 import listener
-from mq import get_connection, consume, QUEUE_OUTGOING
+import rag
+import user_profile
 
-log = setup("listener")
+log = setup("bot")
 
 
 async def _reload_chats_loop():
@@ -19,12 +20,12 @@ async def _reload_chats_loop():
 
 
 async def main():
+    log.info("инициализация RAG")
+    rag.init()
+    user_profile.load()
+
     log.info("загрузка списка групп")
     await chat_manager.load()
-
-    log.info("подключение к RabbitMQ")
-    mq_conn = await get_connection()
-    listener.set_mq_connection(mq_conn)
 
     log.info("подключение к Telegram")
     tg_app = Client(
@@ -41,11 +42,7 @@ async def main():
         log.info("слушаю сообщения")
 
         asyncio.create_task(_reload_chats_loop())
-
-        async def outgoing_handler(payload: dict) -> None:
-            await listener.handle_outgoing(tg_app, payload)
-
-        await consume(mq_conn, QUEUE_OUTGOING, outgoing_handler)
+        await asyncio.Event().wait()
 
 
 if __name__ == "__main__":

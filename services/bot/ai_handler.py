@@ -1,18 +1,14 @@
-import asyncio
 import structlog
-from logger import setup
 from state import get_state, set_state, get_history, append_history, save_user_info
 from ai_client import generate_reply, is_agreement
-from mq import get_connection, publish, consume, QUEUE_INCOMING, QUEUE_OUTGOING
-from config import ADMIN_TG_ID
 import rag
-import metrics
 import user_profile
 
-log = setup("ai-worker")
+log = structlog.get_logger()
 
 
-async def process_message(payload: dict) -> None:
+async def process_message(payload: dict) -> dict:
+    """Обработать входящее сообщение и вернуть ответ."""
     user_id = payload["user_id"]
     text = payload["text"]
     is_opening = payload.get("is_opening", False)
@@ -39,15 +35,14 @@ async def process_message(payload: dict) -> None:
                 )
                 if phone:
                     admin_text += f"\nТелефон: {phone}"
-                await _publish_response(
-                    user_id,
-                    "Отлично! Наш менеджер свяжется с вами в ближайшее время. Спасибо!",
-                    notify_admin=True,
-                    admin_text=admin_text,
-                    admin_parse_mode="html",
-                )
                 log.info("сделка закрыта", user_id=user_id)
-                return
+                return {
+                    "user_id": user_id,
+                    "text": "Отлично! Наш менеджер свяжется с вами в ближайшее время. Спасибо!",
+                    "notify_admin": True,
+                    "admin_text": admin_text,
+                    "admin_parse_mode": "html",
+                }
 
         profile = user_profile.lookup(
             username=from_user.get("username", ""),
@@ -83,50 +78,21 @@ async def process_message(payload: dict) -> None:
             await append_history(user_id, "user", text)
 
         await append_history(user_id, "assistant", reply)
-        await _publish_response(user_id, reply)
         log.info("ответ сгенерирован", user_id=user_id, is_opening=is_opening)
+        return {
+            "user_id": user_id,
+            "text": reply,
+            "notify_admin": False,
+            "admin_text": "",
+            "admin_parse_mode": "",
+        }
 
     except Exception as e:
         log.error("ошибка обработки сообщения", user_id=user_id, error=str(e))
-        metrics.messages_errors_total.inc()
-        await _publish_response(user_id, "Я чуть-чуть сломался и не могу ответить прямо сейчас. Напишите ещё раз — попробую снова.")
-        return
-
-    metrics.messages_processed_total.inc()
-
-
-_mq_connection = None
-
-
-async def _publish_response(user_id: int, text: str, notify_admin: bool = False, admin_text: str = "", admin_parse_mode: str = "") -> None:
-    await publish(_mq_connection, QUEUE_OUTGOING, {
-        "user_id": user_id,
-        "text": text,
-        "notify_admin": notify_admin,
-        "admin_text": admin_text,
-        "admin_parse_mode": admin_parse_mode,
-    })
-
-
-async def main():
-    global _mq_connection
-
-    metrics.start(9090)
-
-    log.info("инициализация RAG")
-    rag.init()
-    user_profile.load()
-
-    log.info("подключение к RabbitMQ")
-    _mq_connection = await get_connection()
-
-    asyncio.create_task(
-        metrics.poll_queue_lengths(_mq_connection, [QUEUE_INCOMING, QUEUE_OUTGOING])
-    )
-
-    log.info("ai-worker готов")
-    await consume(_mq_connection, QUEUE_INCOMING, process_message)
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+        return {
+            "user_id": user_id,
+            "text": "Я чуть-чуть сломался и не могу ответить прямо сейчас. Напишите ещё раз — попробую снова.",
+            "notify_admin": False,
+            "admin_text": "",
+            "admin_parse_mode": "",
+        }

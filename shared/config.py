@@ -21,4 +21,3 @@ CHROMA_PORT = int(os.environ.get("CHROMA_PORT", "8000"))
 REDIS_HOST = os.environ.get("REDIS_HOST", "redis")
 REDIS_PORT = int(os.environ.get("REDIS_PORT", "6379"))
 
-RABBITMQ_URL = os.environ.get("RABBITMQ_URL", "amqp://guest:guest@rabbitmq/")

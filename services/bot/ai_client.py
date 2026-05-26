@@ -1,7 +1,5 @@
-import time
 from openai import AsyncOpenAI
 from config import OPENAI_API_KEY, OPENAI_MODEL
-import metrics
 import prompts
 
 _client = AsyncOpenAI(api_key=OPENAI_API_KEY)
@@ -50,15 +48,11 @@ async def generate_reply(
     else:
         messages.append({"role": "user", "content": user_message})
 
-    t0 = time.monotonic()
-    try:
-        response = await _client.chat.completions.create(
-            model=OPENAI_MODEL,
-            messages=messages,
-        )
-        return response.choices[0].message.content.strip()
-    finally:
-        metrics.gpt_response_seconds.labels(call="reply").observe(time.monotonic() - t0)
+    response = await _client.chat.completions.create(
+        model=OPENAI_MODEL,
+        messages=messages,
+    )
+    return response.choices[0].message.content.strip()
 
 
 async def is_agreement(user_message: str, history: list[dict]) -> bool:
@@ -69,12 +63,8 @@ async def is_agreement(user_message: str, history: list[dict]) -> bool:
         "content": f"Последнее сообщение: «{user_message}». Пользователь согласился купить?",
     })
 
-    t0 = time.monotonic()
-    try:
-        response = await _client.chat.completions.create(
-            model=OPENAI_MODEL,
-            messages=messages,
-        )
-        return response.choices[0].message.content.strip().lower().startswith("yes")
-    finally:
-        metrics.gpt_response_seconds.labels(call="judge").observe(time.monotonic() - t0)
+    response = await _client.chat.completions.create(
+        model=OPENAI_MODEL,
+        messages=messages,
+    )
+    return response.choices[0].message.content.strip().lower().startswith("yes")
