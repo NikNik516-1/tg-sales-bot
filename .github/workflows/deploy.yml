@@ -50,7 +50,6 @@ jobs:
           host: 178.212.13.182
           username: claude
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          host_key_algorithms: ssh-ed25519
           envs: GHCR_TOKEN,GITHUB_ACTOR
           script: |
             cd /var/develop/tg-sales-bot
