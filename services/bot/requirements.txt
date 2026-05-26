@@ -1,6 +1,7 @@
 pyrogram==2.0.106
 TgCrypto
 openai
+httpx[socks]
 chromadb
 redis[asyncio]
 python-dotenv
