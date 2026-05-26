@@ -1,7 +1,7 @@
+pyrogram==2.0.106
+TgCrypto
 openai
 chromadb
-aio-pika
 redis[asyncio]
 python-dotenv
 structlog
-prometheus-client

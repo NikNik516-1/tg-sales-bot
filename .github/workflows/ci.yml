@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        service: [listener, ai-worker, admin]
+        service: [bot, admin]
     steps:
       - uses: actions/checkout@v4
       - name: Build ${{ matrix.service }}

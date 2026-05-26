@@ -11,17 +11,10 @@ from pyrogram.errors import UserIsBlocked, InputUserDeactivated, PeerIdInvalid
 
 from config import ADMIN_TG_ID, REDIS_HOST, REDIS_PORT
 from state import get_state, set_state, clear_user
-from mq import publish, QUEUE_INCOMING, QUEUE_OUTGOING
 import chat_manager
+import ai_handler
 
 log = structlog.get_logger()
-
-_mq_connection = None
-
-
-def set_mq_connection(conn) -> None:
-    global _mq_connection
-    _mq_connection = conn
 
 
 async def _send_safe(client: Client, user_id: int, text: str, parse_mode=None) -> bool:
@@ -31,6 +24,24 @@ async def _send_safe(client: Client, user_id: int, text: str, parse_mode=None) -
     except (UserIsBlocked, InputUserDeactivated, PeerIdInvalid) as e:
         log.warning("не удалось отправить DM", user_id=user_id, error=str(e))
         return False
+
+
+async def handle_outgoing(client: Client, payload: dict) -> None:
+    user_id = payload["user_id"]
+    text = payload.get("text", "")
+
+    if payload.get("notify_admin"):
+        _PM_MAP = {"html": ParseMode.HTML, "markdown": ParseMode.MARKDOWN}
+        admin_pm = _PM_MAP.get(payload.get("admin_parse_mode", ""))
+        await _send_safe(client, ADMIN_TG_ID, payload.get("admin_text", ""), parse_mode=admin_pm)
+
+    if text:
+        await _send_safe(client, user_id, text)
+
+
+async def _process_and_send(client: Client, payload: dict) -> None:
+    response = await ai_handler.process_message(payload)
+    await handle_outgoing(client, response)
 
 
 async def _log_seen_channel(client: Client, message: Message) -> None:
@@ -124,20 +135,6 @@ monitored_chat = filters.create(_in_monitored_chat)
 has_keyword = filters.create(_has_keyword)
 
 
-async def handle_outgoing(client: Client, payload: dict) -> None:
-    """Обработчик сообщений из очереди tg.outgoing (ответы от ai-worker)."""
-    user_id = payload["user_id"]
-    text = payload.get("text", "")
-
-    if payload.get("notify_admin"):
-        _PM_MAP = {"html": ParseMode.HTML, "markdown": ParseMode.MARKDOWN}
-        admin_pm = _PM_MAP.get(payload.get("admin_parse_mode", ""))
-        await _send_safe(client, ADMIN_TG_ID, payload.get("admin_text", ""), parse_mode=admin_pm)
-
-    if text:
-        await _send_safe(client, user_id, text)
-
-
 def _from_user_info(from_user) -> dict:
     return {
         "username": from_user.username or "",
@@ -158,26 +155,26 @@ def register(app: Client):
 
         if state == "pitching":
             log.info("продолжение диалога", user_id=user_id)
-            await publish(_mq_connection, QUEUE_INCOMING, {
+            asyncio.create_task(_process_and_send(client, {
                 "user_id": user_id,
                 "text": f"[Группа] {message.text}",
                 "is_opening": False,
                 "is_returning": False,
                 "from_user": _from_user_info(message.from_user),
-            })
+            }))
             return
 
         if state == "agreed":
             log.info("клиент вернулся", user_id=user_id)
             await clear_user(user_id)
             await set_state(user_id, "pitching")
-            await publish(_mq_connection, QUEUE_INCOMING, {
+            asyncio.create_task(_process_and_send(client, {
                 "user_id": user_id,
                 "text": message.text,
                 "is_opening": True,
                 "is_returning": True,
                 "from_user": _from_user_info(message.from_user),
-            })
+            }))
             return
 
         if state:
@@ -185,13 +182,13 @@ def register(app: Client):
 
         log.info("новый диалог", user_id=user_id)
         await set_state(user_id, "pitching")
-        await publish(_mq_connection, QUEUE_INCOMING, {
+        asyncio.create_task(_process_and_send(client, {
             "user_id": user_id,
             "text": message.text,
             "is_opening": True,
             "is_returning": False,
             "from_user": _from_user_info(message.from_user),
-        })
+        }))
 
     @app.on_message(filters.private & filters.command("reset") & ~filters.me)
     async def on_reset(client: Client, message: Message):
@@ -208,36 +205,36 @@ def register(app: Client):
         state = await get_state(user_id)
 
         if state == "pitching":
-            await publish(_mq_connection, QUEUE_INCOMING, {
+            asyncio.create_task(_process_and_send(client, {
                 "user_id": user_id,
                 "text": message.text,
                 "is_opening": False,
                 "is_returning": False,
                 "from_user": _from_user_info(message.from_user),
-            })
+            }))
         elif state == "agreed":
             log.info("клиент вернулся в личку", user_id=user_id)
             await clear_user(user_id)
             await set_state(user_id, "pitching")
-            await publish(_mq_connection, QUEUE_INCOMING, {
+            asyncio.create_task(_process_and_send(client, {
                 "user_id": user_id,
                 "text": message.text,
                 "is_opening": True,
                 "is_returning": True,
                 "is_direct_dm": True,
                 "from_user": _from_user_info(message.from_user),
-            })
+            }))
         elif not state:
             log.info("новый диалог из лички", user_id=user_id)
             await set_state(user_id, "pitching")
-            await publish(_mq_connection, QUEUE_INCOMING, {
+            asyncio.create_task(_process_and_send(client, {
                 "user_id": user_id,
                 "text": message.text,
                 "is_opening": True,
                 "is_returning": False,
                 "is_direct_dm": True,
                 "from_user": _from_user_info(message.from_user),
-            })
+            }))
 
     @app.on_message(monitored_chat & ~filters.me, group=1)
     async def on_monitored_user(client: Client, message: Message):

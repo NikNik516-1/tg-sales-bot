@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        service: [listener, ai-worker, admin]
+        service: [bot, admin]
     steps:
       - uses: actions/checkout@v4
 
@@ -52,38 +52,12 @@ jobs:
           key: ${{ secrets.DEPLOY_SSH_KEY }}
           envs: GHCR_TOKEN,GITHUB_ACTOR
           script: |
-            export KUBECONFIG=/home/claude/.kube/config
-
             cd /var/develop/tg-sales-bot
             git fetch origin main
             git checkout main
             git pull
 
-            if kubectl get ns tg-sales-bot >/dev/null 2>&1; then
-              # k3s deployment
-              docker compose down 2>/dev/null || true
-              kubectl create secret docker-registry ghcr-secret \
-                --docker-server=ghcr.io \
-                --docker-username="$GITHUB_ACTOR" \
-                --docker-password="$GHCR_TOKEN" \
-                -n tg-sales-bot \
-                --dry-run=client -o yaml | kubectl apply -f -
-              kubectl apply -k k8s/
-
-              # Force-pull new images into containerd cache before restart
-              # (imagePullPolicy: IfNotPresent uses cache; this ensures cache is current)
-              for svc in listener ai-worker admin; do
-                sudo crictl pull \
-                  --creds "$GITHUB_ACTOR:$GHCR_TOKEN" \
-                  "ghcr.io/niknik516-1/tg-sales-bot/${svc}:latest" || true
-              done
-
-              kubectl rollout restart deployment/listener deployment/ai-worker deployment/admin -n tg-sales-bot
-              kubectl rollout status deployment/ai-worker deployment/admin -n tg-sales-bot --timeout=120s
-            else
-              # docker-compose fallback
-              echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-              docker compose pull listener ai-worker admin
-              docker compose up -d
-              docker image prune -f
-            fi
+            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+            docker compose pull bot admin
+            docker compose up -d
+            docker image prune -f
