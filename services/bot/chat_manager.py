@@ -14,6 +14,10 @@ async def load() -> None:
     initialized = await r.exists(_INIT_FLAG)
     if initialized:
         stored = await r.smembers(_CHATS_KEY)
+        if not stored and MONITORED_CHATS:
+            log.warning("monitored_chats пуст в Redis — восстанавливаем из env")
+            await r.sadd(_CHATS_KEY, *MONITORED_CHATS)
+            stored = set(MONITORED_CHATS)
         _chats.update(stored)
     else:
         _chats.update(MONITORED_CHATS)
@@ -45,6 +49,10 @@ async def remove(chat_id: str) -> None:
 async def reload() -> None:
     r = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
     stored = await r.smembers(_CHATS_KEY)
+    if not stored and MONITORED_CHATS:
+        log.warning("monitored_chats пуст в Redis — восстанавливаем из env")
+        await r.sadd(_CHATS_KEY, *MONITORED_CHATS)
+        stored = set(MONITORED_CHATS)
     await r.aclose()
     if stored != _chats:
         _chats.clear()
