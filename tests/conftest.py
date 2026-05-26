@@ -10,7 +10,7 @@ os.environ.setdefault("ADMIN_TG_ID", "12345")
 os.environ.setdefault("KEYWORDS", "хочу купить,нужна ручка,ищу ручку")
 os.environ.setdefault("MONITORED_CHATS", "-100123,-100456")
 
-# Make shared/ and listener/ importable
+# Make shared/ and bot/ importable
 ROOT = os.path.dirname(os.path.dirname(__file__))
 sys.path.insert(0, os.path.join(ROOT, "shared"))
-sys.path.insert(0, os.path.join(ROOT, "services", "listener"))
+sys.path.insert(0, os.path.join(ROOT, "services", "bot"))
