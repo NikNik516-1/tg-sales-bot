@@ -211,11 +211,14 @@ docker compose up -d
 
 **ROOT_PATH:** `/adminka` (в .env на сервере)
 
-**SOCKS5-прокси (Telegram):** хостер блокирует Telegram, тоннель через сервер 1:
+**SOCKS5-прокси (Telegram + OpenAI):** хостер блокирует Telegram и OpenAI, тоннель через сервер 1:
 - systemd: `autossh-socks5.service` (active на сервере 2), слушает `0.0.0.0:1080`
 - из Docker-контейнера: `host.docker.internal:1080`
-- env: `TG_PROXY_HOST=host.docker.internal`, `TG_PROXY_PORT=1080` (в .env на сервере)
+- env (в .env на сервере):
+  - `TG_PROXY_HOST=host.docker.internal`, `TG_PROXY_PORT=1080` — для Pyrogram
+  - `HTTPS_PROXY=socks5h://host.docker.internal:1080` — для OpenAI SDK (httpx)
 - UFW: `allow from 172.16.0.0/12 to any port 1080` (Docker → хост)
+- `docker-compose.yml`: `extra_hosts: host.docker.internal:host-gateway` для сервиса bot
 
 ## Сбор пользователей из мониторируемых групп
 
