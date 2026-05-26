@@ -193,7 +193,7 @@ pytest -v
 
 ## Deploy
 
-**Сервер:** `77.83.87.29` (claude@), директория `/var/develop/tg-sales-bot/`
+**Сервер:** `178.212.13.182` (claude@), директория `/var/develop/tg-sales-bot/`
 
 **Обновление — через CI/CD (автоматически):**
 Смержить PR в `main` → GitHub Actions задеплоит сам.
@@ -206,8 +206,16 @@ docker compose pull
 docker compose up -d
 ```
 
-**Nginx:** добавлен location в `/etc/nginx/sites-enabled/antilopa-gnu-ru.conf`:
-- `https://antilopa-gnu.ru/tg-sales-bot/adminka/` → `http://127.0.0.1:8082/`
+**Nginx:** location в `/etc/nginx/sites-enabled/begindialog.conf`:
+- `https://begindialog.ru/adminka/` → `http://127.0.0.1:8082/`
+
+**ROOT_PATH:** `/adminka` (в .env на сервере)
+
+**SOCKS5-прокси (Telegram):** хостер блокирует Telegram, тоннель через сервер 1:
+- systemd: `autossh-socks5.service` (active на сервере 2), слушает `0.0.0.0:1080`
+- из Docker-контейнера: `host.docker.internal:1080`
+- env: `TG_PROXY_HOST=host.docker.internal`, `TG_PROXY_PORT=1080` (в .env на сервере)
+- UFW: `allow from 172.16.0.0/12 to any port 1080` (Docker → хост)
 
 ## Сбор пользователей из мониторируемых групп
 

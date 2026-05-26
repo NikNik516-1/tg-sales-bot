@@ -41,6 +41,8 @@ services:
       chromadb:
         condition: service_healthy
     env_file: .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./data:/app/data
     networks:
