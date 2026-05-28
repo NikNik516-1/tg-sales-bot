@@ -27,6 +27,7 @@ def init():
 
 
 def search(query: str, n_results: int = 5) -> list[str]:
+    global _collection
     if _collection is None:
         return []
     try:
@@ -34,5 +35,12 @@ def search(query: str, n_results: int = 5) -> list[str]:
         docs = results.get("documents", [[]])[0]
         return [d for d in docs if d]
     except Exception as e:
-        print(f"[RAG] Ошибка поиска: {e}")
-        return []
+        print(f"[RAG] Ошибка поиска: {e}, переподключаемся")
+        try:
+            _connect(retries=2, delay=1.0)
+            results = _collection.query(query_texts=[query], n_results=n_results)
+            docs = results.get("documents", [[]])[0]
+            return [d for d in docs if d]
+        except Exception as e2:
+            print(f"[RAG] Повторная ошибка: {e2}")
+            return []
