@@ -26,7 +26,7 @@ def init():
     _connect()
 
 
-def search(query: str, n_results: int = 3) -> list[str]:
+def search(query: str, n_results: int = 5) -> list[str]:
     if _collection is None:
         return []
     try:
