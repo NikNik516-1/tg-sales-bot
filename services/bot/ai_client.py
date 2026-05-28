@@ -18,7 +18,12 @@ async def generate_reply(
 ) -> str:
     context_block = f"\n\nБаза знаний:\n{rag_context}" if rag_context else ""
     profile_block = f"\n\nПрофиль клиента:\n{user_profile}" if user_profile else ""
-    messages = [{"role": "system", "content": prompts.get_sales() + context_block + profile_block}]
+    system_prompt = prompts.get_sales() + context_block + profile_block
+    import structlog as _sl
+    _sl.get_logger().info("промпт к модели", sys_len=len(system_prompt),
+                          has_rag=bool(rag_context), rag_preview=rag_context[:200] if rag_context else "",
+                          rules_tail=prompts.get_sales()[-300:])
+    messages = [{"role": "system", "content": system_prompt}]
     messages.extend({"role": m["role"], "content": m["content"]} for m in history[-12:])
 
     if is_opening:

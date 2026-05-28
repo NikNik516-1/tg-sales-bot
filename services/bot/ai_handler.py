@@ -52,6 +52,8 @@ async def process_message(payload: dict) -> dict:
 
         rag_docs = rag.search(text)
         rag_context = "\n---\n".join(rag_docs)
+        log.info("RAG результаты", user_id=user_id, query=text[:100], n_docs=len(rag_docs),
+                 docs=[d[:120] for d in rag_docs])
         reply = await generate_reply(
             user_message=text,
             history=history,
