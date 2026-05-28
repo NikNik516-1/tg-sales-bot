@@ -8,7 +8,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import redis.asyncio as aioredis
-from config import REDIS_HOST, REDIS_PORT, CHROMA_HOST, CHROMA_PORT, OPENAI_API_KEY
+from config import REDIS_HOST, REDIS_PORT, CHROMA_HOST, CHROMA_PORT
 import chat_manager
 from state import get_all_active_users, get_history, get_state, clear_user, get_user_info
 
@@ -328,10 +328,10 @@ async def seen_users_export():
 
 def _run_ingest() -> int:
     import chromadb
-    from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
+    from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
 
     client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
-    ef = OpenAIEmbeddingFunction(api_key=OPENAI_API_KEY, model_name="text-embedding-3-small")
+    ef = DefaultEmbeddingFunction()
     collection = client.get_or_create_collection("sales_knowledge", embedding_function=ef)
 
     documents, ids = [], []
