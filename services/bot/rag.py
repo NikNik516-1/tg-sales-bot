@@ -1,19 +1,19 @@
 import time
 import chromadb
-from chromadb.utils.embedding_functions import OpenAIEmbeddingFunction
-from config import CHROMA_HOST, CHROMA_PORT, OPENAI_API_KEY
+from chromadb.utils.embedding_functions import DefaultEmbeddingFunction
+from config import CHROMA_HOST, CHROMA_PORT
 
 _collection = None
+_ef = DefaultEmbeddingFunction()
 
 
 def _connect(retries: int = 10, delay: float = 3.0):
     global _collection
-    ef = OpenAIEmbeddingFunction(api_key=OPENAI_API_KEY, model_name="text-embedding-3-small")
     for attempt in range(retries):
         try:
             client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT, ssl=False)
             client.heartbeat()
-            _collection = client.get_or_create_collection("sales_knowledge", embedding_function=ef)
+            _collection = client.get_or_create_collection("sales_knowledge", embedding_function=_ef)
             print(f"[RAG] Подключено к ChromaDB, документов: {_collection.count()}")
             return
         except Exception as e:
