@@ -339,16 +339,26 @@ def _run_ingest() -> int:
     collection = client.create_collection("sales_knowledge", embedding_function=ef)
 
     documents, ids = [], []
-    chunk_size = 600
+    max_chunk = 1200
     for path in sorted(DATA_DIR.glob("*.txt")):
         if path.name == "users.txt":
             continue
         content = path.read_text(encoding="utf-8")
-        chunks = [content[i : i + chunk_size].strip() for i in range(0, len(content), chunk_size)]
-        for k, chunk in enumerate(chunks):
-            if chunk:
-                documents.append(chunk)
+        # Split by double newline to keep each item (product/paragraph) intact
+        paragraphs = [p.strip() for p in content.split("\n\n") if p.strip()]
+        k = 0
+        for para in paragraphs:
+            if len(para) <= max_chunk:
+                documents.append(para)
                 ids.append(f"{path.name}_{k}")
+                k += 1
+            else:
+                for i in range(0, len(para), max_chunk):
+                    sub = para[i : i + max_chunk].strip()
+                    if sub:
+                        documents.append(sub)
+                        ids.append(f"{path.name}_{k}")
+                        k += 1
     if documents:
         collection.upsert(documents=documents, ids=ids)
     return len(documents)
