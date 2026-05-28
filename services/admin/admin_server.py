@@ -340,8 +340,9 @@ def _run_ingest() -> int:
 
     documents, ids = [], []
     max_chunk = 1200
+    _SKIP = {"users.txt", "sales_scripts.txt"}
     for path in sorted(DATA_DIR.glob("*.txt")):
-        if path.name == "users.txt":
+        if path.name in _SKIP:
             continue
         content = path.read_text(encoding="utf-8")
         # Split by double newline to keep each item (product/paragraph) intact
