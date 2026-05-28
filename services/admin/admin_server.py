@@ -332,7 +332,11 @@ def _run_ingest() -> int:
 
     client = chromadb.HttpClient(host=CHROMA_HOST, port=CHROMA_PORT)
     ef = DefaultEmbeddingFunction()
-    collection = client.get_or_create_collection("sales_knowledge", embedding_function=ef)
+    try:
+        client.delete_collection("sales_knowledge")
+    except Exception:
+        pass
+    collection = client.create_collection("sales_knowledge", embedding_function=ef)
 
     documents, ids = [], []
     chunk_size = 600
