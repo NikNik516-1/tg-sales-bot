@@ -26,19 +26,23 @@ def init():
     _connect()
 
 
-def search(query: str, n_results: int = 5) -> list[str]:
+def search(query: str, n_results: int = 20) -> list[str]:
     global _collection
     if _collection is None:
         return []
+    actual = min(n_results, _collection.count())
+    if actual == 0:
+        return []
     try:
-        results = _collection.query(query_texts=[query], n_results=n_results)
+        results = _collection.query(query_texts=[query], n_results=actual)
         docs = results.get("documents", [[]])[0]
         return [d for d in docs if d]
     except Exception as e:
         print(f"[RAG] Ошибка поиска: {e}, переподключаемся")
         try:
             _connect(retries=2, delay=1.0)
-            results = _collection.query(query_texts=[query], n_results=n_results)
+            actual = min(n_results, _collection.count())
+            results = _collection.query(query_texts=[query], n_results=actual)
             docs = results.get("documents", [[]])[0]
             return [d for d in docs if d]
         except Exception as e2:
