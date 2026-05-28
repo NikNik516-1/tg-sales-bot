@@ -1,8 +1,11 @@
 from openai import AsyncOpenAI
-from config import OPENAI_API_KEY, OPENAI_MODEL
+from config import DEEPSEEK_API_KEY, DEEPSEEK_MODEL
 import prompts
 
-_client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+_client = AsyncOpenAI(
+    api_key=DEEPSEEK_API_KEY,
+    base_url="https://api.deepseek.com",
+)
 
 
 async def generate_reply(
@@ -49,7 +52,7 @@ async def generate_reply(
         messages.append({"role": "user", "content": user_message})
 
     response = await _client.chat.completions.create(
-        model=OPENAI_MODEL,
+        model=DEEPSEEK_MODEL,
         messages=messages,
     )
     return response.choices[0].message.content.strip()
@@ -64,7 +67,7 @@ async def is_agreement(user_message: str, history: list[dict]) -> bool:
     })
 
     response = await _client.chat.completions.create(
-        model=OPENAI_MODEL,
+        model=DEEPSEEK_MODEL,
         messages=messages,
     )
     return response.choices[0].message.content.strip().lower().startswith("yes")
