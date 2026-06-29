@@ -11,8 +11,9 @@ import user_profile
 
 log = setup("bot")
 
-_CONNECT_TIMEOUT = 5 * 60    # сек до выхода если не подключились
-_RECONNECT_TIMEOUT = 10 * 60  # сек до выхода если потеряли соединение
+_CONNECT_TIMEOUT = 5 * 60     # сек до выхода если не подключились при старте
+_WATCHDOG_INTERVAL = 60       # секунд между проверками связи
+_WATCHDOG_FAIL_TIMEOUT = 600  # 10 минут без связи → выйти (Docker перезапустит)
 
 
 async def _reload_chats_loop():
@@ -24,18 +25,27 @@ async def _reload_chats_loop():
             log.error("ошибка перезагрузки чатов", error=str(e))
 
 
-async def _connection_watchdog(app: Client):
-    disconnected_since: float | None = None
+async def _watchdog_loop(tg_app: Client):
+    # Активный пинг через get_me() надёжнее is_connected:
+    # обнаруживает зомби-соединения (TCP жив, но данные не ходят)
+    await asyncio.sleep(60)  # дать время на первоначальный старт
+    failed_since: float | None = None
     while True:
-        await asyncio.sleep(30)
-        if app.is_connected:
-            disconnected_since = None
-        else:
-            if disconnected_since is None:
-                disconnected_since = time.monotonic()
-                log.warning("потеря соединения с Telegram")
-            elif time.monotonic() - disconnected_since > _RECONNECT_TIMEOUT:
-                log.error("не удалось восстановить соединение, перезапуск", timeout=_RECONNECT_TIMEOUT)
+        await asyncio.sleep(_WATCHDOG_INTERVAL)
+        try:
+            await asyncio.wait_for(tg_app.get_me(), timeout=20)
+            if failed_since is not None:
+                log.info("watchdog: соединение восстановлено")
+            failed_since = None
+        except Exception as e:
+            now = time.monotonic()
+            if failed_since is None:
+                failed_since = now
+                log.warning("watchdog: нет связи с Telegram", error=str(e))
+            elapsed = int(now - failed_since)
+            log.warning("watchdog: нет связи", elapsed_sec=elapsed)
+            if elapsed >= _WATCHDOG_FAIL_TIMEOUT:
+                log.error("watchdog: нет связи 10+ мин — завершаю процесс для рестарта")
                 sys.exit(1)
 
 
@@ -70,7 +80,7 @@ async def main():
         log.info("слушаю сообщения")
 
         asyncio.create_task(_reload_chats_loop())
-        asyncio.create_task(_connection_watchdog(tg_app))
+        asyncio.create_task(_watchdog_loop(tg_app))
         await asyncio.Event().wait()
     finally:
         await tg_app.stop()
