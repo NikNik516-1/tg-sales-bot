@@ -42,13 +42,11 @@ docker exec cl_tg-sales-bot-redis-1 redis-cli DEL "state:USER_ID" "history:USER_
 
 ## Загрузка базы знаний в ChromaDB
 
-Запускать с хоста после того как ChromaDB уже запущен:
+Актуальный способ — кнопка «Переиндексировать» на странице **База знаний** веб-админки (или `POST /knowledge/reindex`). Реализация — `_run_ingest()` в `services/admin/admin_server.py`: удаляет и заново создаёт коллекцию `sales_knowledge` через `DefaultEmbeddingFunction` (локальная ONNX-модель, без внешних API), режет `data/knowledge_base/*.txt` по параграфам (кроме `users.txt` и `sales_scripts.txt`). После реиндекса нужно перезапустить `bot`-контейнер (`docker restart cl_tg-sales-bot-bot-1`) — иначе `rag.py` держит ссылку на старый (уже удалённый) ID коллекции и падает с `Collection ... does not exist.`
 
-```bash
-$env:CHROMA_HOST="localhost"; python scripts/ingest.py
-```
+`scripts/ingest.py` — устаревший скрипт (использует `OpenAIEmbeddingFunction`, требует `OPENAI_API_KEY`, не совпадает по embedding-функции с `rag.py`). Не использовать, конфликтует с коллекцией, созданной через reindex.
 
-Файлы базы знаний: `data/knowledge_base/*.txt`. После добавления/изменения файлов — перезапустить ingest.
+Файлы базы знаний: `data/knowledge_base/*.txt`. После добавления/изменения файлов — переиндексировать через админку.
 
 ## Получение строки сессии (один раз)
 
@@ -193,10 +191,10 @@ pytest -v
 
 ## Deploy
 
-**Сервер:** `178.212.13.182` (claude@), директория `/var/develop/tg-sales-bot/`
+**Сервер:** `81.177.166.233` (сервер 6, claude@), директория `/var/develop/tg-sales-bot/`. **Перенесено с сервера 2 (`178.212.13.182`) 2026-07-16** — старое место на сервере 2 остановлено (`docker compose down`, nginx-сайт снят), но пока не удалено (наблюдение перед полной очисткой).
 
 **Обновление — через CI/CD (автоматически):**
-Смержить PR в `main` → GitHub Actions задеплоит сам.
+Смержить PR в `main` → GitHub Actions задеплоит сам (`DEPLOY_SSH_KEY` указывает на сервер 6).
 
 **Обновление — вручную:**
 ```bash
@@ -206,13 +204,14 @@ docker compose pull
 docker compose up -d
 ```
 
-**Nginx:** location в `/etc/nginx/sites-enabled/begindialog.conf`:
+**Nginx:** сервер 6 использует SNI-split (`stream` на публичном 443 → внутренний nginx `127.0.0.1:8081`, порт 80 напрямую). Конфиг `/etc/nginx/sites-enabled/begindialog.conf`:
 - `https://begindialog.ru/adminka/` → `http://127.0.0.1:8082/`
+- `https://begindialog.ru/api/v1/contact` (форма лендинга) → `https://www.radar-novostroek.ru/api/v1/contact` (проксируется на сервер 2, где остаётся `nedvizbot-api` — та же схема, что у `bot_max`)
 
 **ROOT_PATH:** `/adminka` (в .env на сервере)
 
-**SOCKS5-прокси (Telegram + OpenAI):** хостер блокирует Telegram и OpenAI, тоннель через сервер 1:
-- systemd: `autossh-socks5.service` (active на сервере 2), слушает `0.0.0.0:1080`
+**SOCKS5-прокси (Telegram + OpenAI):** провайдер сервера 6 блокирует прямой доступ к Telegram и OpenAI, тоннель через сервер 4 (Amsterdam):
+- systemd: `autossh-socks5.service` (active на сервере 6), слушает `0.0.0.0:1080` (расширено с `127.0.0.1:1080` при переезде — этот же туннель используется и парсером ObligationRating)
 - из Docker-контейнера: `host.docker.internal:1080`
 - env (в .env на сервере):
   - `TG_PROXY_HOST=host.docker.internal`, `TG_PROXY_PORT=1080` — для Pyrogram
