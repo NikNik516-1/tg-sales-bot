@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import structlog
 import redis.asyncio as aioredis
 from pyrogram import Client, filters
-from pyrogram.enums import ChatType, ParseMode
+from pyrogram.enums import ChatType, ParseMode, ChatAction
 from pyrogram.types import Message
 from pyrogram.errors import UserIsBlocked, InputUserDeactivated, PeerIdInvalid
 
@@ -40,6 +40,10 @@ async def handle_outgoing(client: Client, payload: dict) -> None:
 
 
 async def _process_and_send(client: Client, payload: dict) -> None:
+    try:
+        await client.send_chat_action(payload["user_id"], ChatAction.TYPING)
+    except Exception as e:
+        log.warning("не удалось отправить typing-статус", user_id=payload["user_id"], error=str(e))
     response = await ai_handler.process_message(payload)
     await handle_outgoing(client, response)
 
